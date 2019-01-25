@@ -1,14 +1,18 @@
 // RFCs:
-// - [RFC 5545](https://tools.ietf.org/html/rfc5545)
-// - [RFC 5546](https://tools.ietf.org/html/rfc5546)
-// - [RFC 6868](https://tools.ietf.org/html/rfc6868)
-// - [RFC 7529](https://tools.ietf.org/html/rfc7529)
-// - [RFC 7986](https://tools.ietf.org/html/rfc7986)
+// - ABNF:
+//   - [RFC 5234](https://tools.ietf.org/html/rfc5234)
+// - ICalendar:
+//   - [RFC 5545](https://tools.ietf.org/html/rfc5545)
+//   - [RFC 5546](https://tools.ietf.org/html/rfc5546)
+//   - [RFC 6868](https://tools.ietf.org/html/rfc6868)
+//   - [RFC 7529](https://tools.ietf.org/html/rfc7529)
+//   - [RFC 7986](https://tools.ietf.org/html/rfc7986)
 
 #include <istream>
 #include <iostream> // TODO: Remove iostream include.
 #include <string>
 
+#define NOT_IMPLEMENTED do{throw not_implemented(__func__);}while(false)
 
 // -- Typedefs. ----------------------------------------------------------------
 using string = std::string;
@@ -20,24 +24,35 @@ public:
         invalid_ical() : std::runtime_error("Invalid ICalendar file") {}
 };
 
-class unexpected_token : public std::runtime_error {
+class not_implemented : public std::runtime_error {
 public:
-        unexpected_token() : std::runtime_error("Unexpected token") {}
+        not_implemented(std::string const &what) :
+                std::runtime_error("Not implemented: " + what) {}
+};
+
+class syntax_error : public std::runtime_error {
+public:
+        syntax_error() : std::runtime_error("Syntax error.") {}
+        syntax_error(std::string const &msg) : std::runtime_error(msg) {}
+};
+
+class unexpected_token : public syntax_error {
+public:
+        unexpected_token() : syntax_error() {}
         unexpected_token(std::istream const &is, string const &tok)
-                : std::runtime_error("Expected token '" + tok + "' not found")
+                : syntax_error("Expected token '" + tok + "' not found")
         {}
 };
 
-class key_value_pair_expected : public std::runtime_error {
+class key_value_pair_expected : public syntax_error {
 public:
         key_value_pair_expected()
-                : std::runtime_error("Expected key-value-pair") {}
+                : syntax_error("Expected key-value-pair") {}
 
         key_value_pair_expected(std::istream const &is,
                                 string const &k,
                                 string const &v)
-                : std::runtime_error(
-                        "Expected key-value-pair '" + k + ":" + v + "'")
+                : syntax_error("Expected key-value-pair '" + k + ":" + v + "'")
         {}
 };
 
@@ -90,7 +105,6 @@ public:
         void commit() { s_ = nullptr; }
 };
 
-
 // -- Parser Helpers. ----------------------------------------------------------
 void expect_token(std::istream &is, string const &tok) {
         save_input_pos ptran(is);
@@ -110,7 +124,7 @@ bool read_token(std::istream &is, string const &tok) {
         try {
                 expect_token(is, tok);
                 return true;
-        } catch(...) {
+        } catch(syntax_error &) {
                 return false;
         }
 }
@@ -129,7 +143,7 @@ bool read_newline(std::istream &is) {
         try {
                 expect_newline(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -140,7 +154,7 @@ void expect_alpha(std::istream &is) {
         switch(i) {
         default:
         case EOF:
-                throw std::runtime_error("expected alpha");
+                throw syntax_error();
         case 'a':
         case 'b':
         case 'c':
@@ -202,7 +216,7 @@ bool read_alpha(std::istream &is) {
         try {
                 expect_alpha(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -212,7 +226,7 @@ void expect_digit(std::istream &is) {
         save_input_pos ptran(is);
         const auto i = is.get();
         if (i<'0' || i>'9')
-                throw std::runtime_error("expected digit");
+                throw syntax_error("expected digit");
         ptran.commit();
 }
 
@@ -220,7 +234,7 @@ bool read_digit(std::istream &is) {
         try {
                 expect_digit(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -229,7 +243,7 @@ void expect_alnum(std::istream &is) {
         save_input_pos ptran(is);
         const auto success = read_alpha(is) || read_digit(is);
         if (!success) {
-                throw std::runtime_error("expected alpha or digit");
+                throw syntax_error("expected alpha or digit");
         }
         ptran.commit();
 }
@@ -238,9 +252,25 @@ bool read_alnum(std::istream &is) {
         try {
                 expect_alnum(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
+}
+
+// -- ABNF (RFC 5234) Parser Helpers. ------------------------------------------
+bool read_htab(std::istream &is) {
+        // HTAB = %x09
+        return read_token(is, "\t");
+}
+
+bool read_sp(std::istream &is) {
+        // SP = %x20
+        return read_token(is, " ");
+}
+
+bool read_wsp(std::istream &is) {
+        // WSP = SP / HTAB ; white space
+        return read_sp(is) || read_htab(is);
 }
 
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
@@ -260,7 +290,7 @@ bool read_key_value(std::istream &is, string const &k, string const &v) {
         try {
                 expect_key_value(is, k, v);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -337,7 +367,7 @@ void expect_name(std::istream &);
 bool read_iana_token(std::istream &);
 void expect_iana_token(std::istream &);
 
-bool read_vendor_id(std::istream &);
+bool read_vendorid(std::istream &);
 void expect_param(std::istream &);
 void expect_param_name(std::istream &);
 void expect_param_value(std::istream &);
@@ -348,6 +378,8 @@ bool read_value_char(std::istream &);
 bool read_qvalue_char(std::istream &);
 bool read_non_us_ascii(std::istream &);
 bool read_control(std::istream &);
+bool read_dquote(std::istream &is);
+bool read_wsp(std::istream &is);
 void expect_value(std::istream &);
 
 bool read_x_prop(std::istream &);
@@ -377,7 +409,7 @@ void expect_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw std::runtime_error("expected iana-token or x-name");
+                throw syntax_error("expected iana-token or x-name");
         }
 }
 
@@ -400,8 +432,25 @@ void expect_iana_token(std::istream &is) {
 
 //     vendorid      = 3*(ALPHA / DIGIT)
 //     ; Vendor identification
+void expect_vendorid(std::istream &is) {
+        save_input_pos ptran(is);
+
+        expect_alnum(is);
+        expect_alnum(is);
+        expect_alnum(is);
+
+        while (read_alnum(is)) {
+        }
+
+        ptran.commit();
+}
 bool read_vendorid(std::istream &is) {
-        throw std::runtime_error("not implemented: read_vendorid");
+        try {
+                expect_vendorid(is);
+                return true;
+        } catch (syntax_error &) {
+                return false;
+        }
 }
 
 //     param         = param-name "=" param-value *("," param-value)
@@ -425,7 +474,7 @@ void expect_param_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw std::runtime_error("expected param-name");
+                throw syntax_error("expected param-name");
         }
 }
 
@@ -436,7 +485,7 @@ void expect_param_value(std::istream &is) {
                 read_paramtext(is) ||
                 read_quoted_string(is);
         if (!success) {
-                throw std::runtime_error("expected param-value");
+                throw syntax_error("expected param-value");
         }
 }
 
@@ -449,43 +498,153 @@ bool read_paramtext(std::istream &is) {
 
 //     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
 bool read_quoted_string(std::istream &is) {
-        throw std::runtime_error("not implemented: read_quoted_string");
+        NOT_IMPLEMENTED;
 }
 
 //     SAFE-CHAR     = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-7E
 //                   / NON-US-ASCII
 //     ; Any character except CONTROL, DQUOTE, ";", ":", ","
 bool read_safe_char(std::istream &) {
-        throw std::runtime_error("not implemented: read_safe_char");
+        NOT_IMPLEMENTED;
 }
 
 //     VALUE-CHAR    = WSP / %x21-7E / NON-US-ASCII
 //     ; Any textual character
-bool read_value_char(std::istream &) {
-        throw std::runtime_error("not implemented: read_value_char");
+bool read_value_char(std::istream &is) {
+        save_input_pos ptran(is);
+        // WSP
+        if (read_wsp(is)) {
+                ptran.commit();
+                return true;
+        }
+        const auto i = is.get();
+        switch(i) {
+        // %x21-7E
+        case '!':
+        case '"':
+        case '#':
+        case '$':
+        case '%':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case '+':
+        case ',':
+        case '-':
+        case '.':
+        case '/':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case ':':
+        case ';':
+        case '<':
+        case '=':
+        case '>':
+        case '?':
+        case '@':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+        case '[':
+        case '\\':
+        case ']':
+        case '^':
+        case '_':
+        case '`':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+        case '{':
+        case '|':
+        case '}':
+        case '~':
+                ptran.commit();
+                return true;
+        }
+
+        // NON-US-ASCII
+        std::cerr << "todo: non-us-ascii" << std::endl;
+        return false;
 }
 
 //     QSAFE-CHAR    = WSP / %x21 / %x23-7E / NON-US-ASCII
 //     ; Any character except CONTROL and DQUOTE
 bool read_qsafe_char(std::istream &) {
-        throw std::runtime_error("not implemented: read_qsafe_char");
+        NOT_IMPLEMENTED;
 }
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
 //     ; UTF8-2, UTF8-3, and UTF8-4 are defined in [RFC3629]
 bool read_non_us_ascii(std::istream &) {
-        throw std::runtime_error("not implemented: read_non_us_ascii");
+        NOT_IMPLEMENTED;
 }
 
 //     CONTROL       = %x00-08 / %x0A-1F / %x7F
 //     ; All the controls except HTAB
 bool read_control(std::istream &) {
-        throw std::runtime_error("not implemented: read_control");
+        NOT_IMPLEMENTED;
 }
 
 //     value         = *VALUE-CHAR
 void expect_value(std::istream &is) {
-        throw std::logic_error("not implemented: expect_value");
+        while (read_value_char(is)) {
+        }
 }
 
 
@@ -512,7 +671,7 @@ bool read_ical(std::istream &is) {
         try {
                 expect_ical(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -575,7 +734,7 @@ bool read_prodid(std::istream &is) {
         try {
                 expect_prodid(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -584,22 +743,17 @@ bool read_prodid(std::istream &is) {
 void expect_version(std::istream &is) {
         save_input_pos ptran(is);
         expect_token(is, "VERSION");
-        std::cout << "ALALAL" << std::endl;
         expect_verparam(is);
-        std::cout << "BLALAL" << std::endl;
         expect_token(is, ":");
-        std::cout << "CLALAL" << std::endl;
         expect_vervalue(is);
-        std::cout << "DLALAL" << std::endl;
         expect_newline(is);
-        std::cout << "ELALAL" << std::endl;
         ptran.commit();
 }
 bool read_version(std::istream &is) {
         try {
                 expect_version(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -639,7 +793,7 @@ bool read_calscale(std::istream &is) {
         try {
                 expect_calscale(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -662,7 +816,7 @@ bool read_method(std::istream &is) {
         try {
                 expect_method(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -704,7 +858,7 @@ bool read_x_prop(std::istream &is) {
         try {
                 expect_x_prop(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -713,25 +867,37 @@ bool read_x_prop(std::istream &is) {
 //     x-name        = "X-" [vendorid "-"] 1*(ALPHA / DIGIT / "-")
 //     ; Reserved for experimental use.
 void expect_x_name(std::istream &is) {
-        throw std::runtime_error("not implemented: read_x_name");
-        /*save_input_pos ts(is);
+        save_input_pos ts(is);
+
+        // "X-"
         if (!read_token(is, "X-"))
-                return false;
+                throw syntax_error();
+
+        // [vendorid "-"]
+        if (read_vendorid(is)) {
+                expect_token(is, "-");
+        }
+
+        // 1*(ALPHA / DIGIT / "-")
+        if (!read_alnum(is) && !read_token(is, "-"))
+                throw syntax_error();
+        while (read_alnum(is) || read_token(is, "-")) {
+        }
+
         ts.commit();
-        return true;*/
 }
 bool read_x_name(std::istream &is) {
         try {
                 expect_x_name(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
 
 
 bool read_iana_prop(std::istream &is) {
-        throw std::logic_error("not implemented: read_iana_prop");
+        NOT_IMPLEMENTED;
 }
 
 
@@ -743,8 +909,13 @@ void expect_pidparam(std::istream &is) {
         ptran.commit();
 }
 
+//     other-param   = (iana-param / x-param)
+//     iana-param  = iana-token "=" param-value *("," param-value)
+//     ; Some other IANA-registered iCalendar parameter.
+//     x-param     = x-name "=" param-value *("," param-value)
+//     ; A non-standard, experimental parameter.
 void expect_other_param(std::istream &is) {
-        throw std::logic_error("not implemented: expect_other_param");
+        NOT_IMPLEMENTED;
 }
 
 //       pidvalue   = text
@@ -755,25 +926,167 @@ void expect_pidvalue(std::istream &is) {
 }
 
 
-//       text       = *(TSAFE-CHAR / ":" / DQUOTE / ESCAPED-CHAR)
-//          ; Folded according to description above
-//
 //       ESCAPED-CHAR = ("\\" / "\;" / "\," / "\N" / "\n")
 //          ; \\ encodes \, \N or \n encodes newline
 //          ; \; encodes ;, \, encodes ,
-//
+bool read_escaped_char(std::istream &is) {
+        return read_token(is, "\\\\")
+            || read_token(is, "\\;")
+            || read_token(is, "\\,")
+            || read_token(is, "\\N")
+            || read_token(is, "\\n");
+}
+
 //       TSAFE-CHAR = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-5B /
 //                    %x5D-7E / NON-US-ASCII
 //          ; Any character except CONTROLs not needed by the current
 //          ; character set, DQUOTE, ";", ":", "\", ","
-void expect_text(std::istream &is) {
-        throw std::logic_error("not implemented: expect_text");
+bool read_tsafe_char(std::istream &is) {
+        save_input_pos ptran(is);
+        // WSP
+        if (read_wsp(is)) {
+                ptran.commit();
+                return true;
+        }
+        const auto i = is.get();
+        switch(i) {
+        // %x21
+        case '!':
+
+        // %x23-2B
+        case '#':
+        case '$':
+        case '%':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case '+':
+
+        // %x2D-39
+        case '-':
+        case '.':
+        case '/':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+
+        // %x3C-5B
+        case '<':
+        case '=':
+        case '>':
+        case '?':
+        case '@':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+        case '[':
+
+        // %x5D-7E
+        case ']':
+        case '^':
+        case '_':
+        case '`':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+        case '{':
+        case '|':
+        case '}':
+        case '~':
+                ptran.commit();
+                return true;
+        }
+
+        // NON-US-ASCII
+        std::cerr << "todo: non-us-ascii" << std::endl;
+        return false;
 }
+
+
+//       text       = *(TSAFE-CHAR / ":" / DQUOTE / ESCAPED-CHAR)
+//          ; Folded according to description above
+//
+bool read_text_char(std::istream &is) {
+        return read_tsafe_char(is)
+            || read_token(is, ":")
+            || read_dquote(is)
+            || read_escaped_char(is);
+}
+void expect_text(std::istream &is) {
+        while(read_text_char(is)) {
+        }
+}
+
+// DQUOTE: ASCII 22
+bool read_dquote(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto c = is.get();
+        if (c != 22)
+                return false;
+        ptran.commit();
+        return true;
+}
+
 bool read_text(std::istream &is) {
         try {
                 expect_text(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
@@ -789,7 +1102,7 @@ bool read_text(std::istream &is) {
 //                    1*contentline
 //                    "END" ":" x-name CRLF
 void expect_component(std::istream &is) {
-        throw std::logic_error("not implemented: expect_component");
+        NOT_IMPLEMENTED;
 }
 
 //     icalparameter = altrepparam       ; Alternate text representation
@@ -814,13 +1127,13 @@ void expect_component(std::istream &is) {
 //                   / valuetypeparam    ; Property value data type
 //                   / other-param
 void expect_icalparameter(std::istream &is) {
-        throw std::runtime_error("not implemented: expect_icalparameter");
+        NOT_IMPLEMENTED;
 }
 bool read_icalparameter(std::istream &is) {
         try {
                 expect_icalparameter(is);
                 return true;
-        } catch (...) {
+        } catch (syntax_error &) {
                 return false;
         }
 }
