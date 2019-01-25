@@ -1,4 +1,6 @@
 // RFCs:
+// - Media Types:
+//   - [RFC 4288](https://tools.ietf.org/html/rfc4288)
 // - ABNF:
 //   - [RFC 5234](https://tools.ietf.org/html/rfc5234)
 // - ICalendar:
@@ -7,7 +9,8 @@
 //   - [RFC 6868](https://tools.ietf.org/html/rfc6868)
 //   - [RFC 7529](https://tools.ietf.org/html/rfc7529)
 //   - [RFC 7986](https://tools.ietf.org/html/rfc7986)
-
+// - Tags for Identifying Languages:
+//   - [RFC 5646](https://tools.ietf.org/html/rfc5646)
 #include <istream>
 #include <iostream> // TODO: Remove iostream include.
 #include <string>
@@ -257,6 +260,107 @@ bool read_alnum(std::istream &is) {
         }
 }
 
+// -- Media Type (RFC 4288) Parser Helpers. ------------------------------------
+//       type-name = reg-name
+bool read_type_name(std::istream &) {
+        NOT_IMPLEMENTED;
+}
+
+//       subtype-name = reg-name
+bool read_subtype_name(std::istream &) {
+        NOT_IMPLEMENTED;
+}
+
+//       reg-name = 1*127reg-name-chars
+bool read_reg_name(std::istream &) {
+        NOT_IMPLEMENTED;
+}
+
+//       reg-name-chars = ALPHA / DIGIT / "!" /
+//                       "#" / "$" / "&" / "." /
+//                       "+" / "-" / "^" / "_"
+bool read_reg_name_char(std::istream &) {
+        NOT_IMPLEMENTED;
+}
+
+// -- Tags for Identifying Languages (RFC 5646) Parser Helpers. ----------------
+
+// alphanum      = (ALPHA / DIGIT)     ; letters and numbers
+
+// regular       = "art-lojban"        ; these tags match the 'langtag'
+//               / "cel-gaulish"       ; production, but their subtags
+//               / "no-bok"            ; are not extended language
+//               / "no-nyn"            ; or variant subtags: their meaning
+//               / "zh-guoyu"          ; is defined by their registration
+//               / "zh-hakka"          ; and all of these are deprecated
+//               / "zh-min"            ; in favor of a more modern
+//               / "zh-min-nan"        ; subtag or sequence of subtags
+//               / "zh-xiang"
+
+// irregular     = "en-GB-oed"         ; irregular tags do not match
+//               / "i-ami"             ; the 'langtag' production and
+//               / "i-bnn"             ; would not otherwise be
+//               / "i-default"         ; considered 'well-formed'
+//               / "i-enochian"        ; These tags are all valid,
+//               / "i-hak"             ; but most are deprecated
+//               / "i-klingon"         ; in favor of more modern
+//               / "i-lux"             ; subtags or subtag
+//               / "i-mingo"           ; combination
+//               / "i-navajo"
+//               / "i-pwn"
+//               / "i-tao"
+//               / "i-tay"
+//               / "i-tsu"
+//               / "sgn-BE-FR"
+//               / "sgn-BE-NL"
+//               / "sgn-CH-DE"
+
+// grandfathered = irregular           ; non-redundant tags registered
+//               / regular             ; during the RFC 3066 era
+
+// privateuse    = "x" 1*("-" (1*8alphanum))
+
+//                                     ; Single alphanumerics
+//                                     ; "x" reserved for private use
+// singleton     = DIGIT               ; 0 - 9
+//               / %x41-57             ; A - W
+//               / %x59-5A             ; Y - Z
+//               / %x61-77             ; a - w
+//               / %x79-7A             ; y - z
+
+// extension     = singleton 1*("-" (2*8alphanum))
+
+// variant       = 5*8alphanum         ; registered variants
+//               / (DIGIT 3alphanum)
+
+// region        = 2ALPHA              ; ISO 3166-1 code
+//               / 3DIGIT              ; UN M.49 code
+
+// script        = 4ALPHA              ; ISO 15924 code
+
+// extlang       = 3ALPHA              ; selected ISO 639 codes
+//                 *2("-" 3ALPHA)      ; permanently reserved
+
+// language      = 2*3ALPHA            ; shortest ISO 639 code
+//                 ["-" extlang]       ; sometimes followed by
+//                                     ; extended language subtags
+//               / 4ALPHA              ; or reserved for future use
+//               / 5*8ALPHA            ; or registered language subtag
+
+//  langtag       = language
+//                 ["-" script]
+//                 ["-" region]
+//                 *("-" variant)
+//                 *("-" extension)
+//                 ["-" privateuse]
+
+//  Language-Tag  = langtag             ; normal language tags
+//               / privateuse          ; private use tag
+//               / grandfathered       ; grandfathered tags
+bool read_language_tag(std::istream &) {
+        NOT_IMPLEMENTED;
+}
+
 // -- ABNF (RFC 5234) Parser Helpers. ------------------------------------------
 bool read_htab(std::istream &is) {
         // HTAB = %x09
@@ -371,6 +475,7 @@ bool read_vendorid(std::istream &);
 void expect_param(std::istream &);
 void expect_param_name(std::istream &);
 void expect_param_value(std::istream &);
+bool read_param_value(std::istream &);
 bool read_paramtext(std::istream &);
 bool read_quoted_string(std::istream &);
 bool read_safe_char(std::istream &);
@@ -389,6 +494,7 @@ void expect_x_name(std::istream &);
 
 bool read_icalparameter(std::istream &);
 void expect_icalparameter(std::istream &);
+
 
 //    contentline   = name *(";" param ) ":" value CRLF
 void expect_content_line(std::istream &is) {
@@ -480,13 +586,12 @@ void expect_param_name(std::istream &is) {
 
 
 //     param-value   = paramtext / quoted-string
+bool read_param_value(std::istream &is) {
+        return read_paramtext(is) || read_quoted_string(is);
+}
 void expect_param_value(std::istream &is) {
-        const auto success =
-                read_paramtext(is) ||
-                read_quoted_string(is);
-        if (!success) {
-                throw syntax_error("expected param-value");
-        }
+        if (!read_param_value(is))
+                throw syntax_error();
 }
 
 //     paramtext     = *SAFE-CHAR
@@ -895,11 +1000,25 @@ bool read_x_name(std::istream &is) {
         }
 }
 
-
-bool read_iana_prop(std::istream &is) {
-        NOT_IMPLEMENTED;
+//       iana-prop = iana-token *(";" icalparameter) ":" value CRLF
+void expect_iana_prop(std::istream &is) {
+        save_input_pos ptran(is);
+        expect_iana_token(is);
+        while (read_token(is, ";"))
+                expect_icalparameter(is);
+        expect_token(is, ":");
+        expect_value(is);
+        expect_newline(is);
+        ptran.commit();
 }
-
+bool read_iana_prop(std::istream &is) {
+        try {
+                expect_iana_prop(is);
+                return true;
+        } catch (syntax_error &) {
+                return false;
+        }
+}
 
 //       pidparam   = *(";" other-param)
 void expect_pidparam(std::istream &is) {
@@ -1091,19 +1210,525 @@ bool read_text(std::istream &is) {
         }
 }
 
-//       component  = 1*(eventc / todoc / journalc / freebusyc /
-//                    timezonec / iana-comp / x-comp)
-//
-//       iana-comp  = "BEGIN" ":" iana-token CRLF
-//                    1*contentline
-//                    "END" ":" iana-token CRLF
-//
 //       x-comp     = "BEGIN" ":" x-name CRLF
 //                    1*contentline
 //                    "END" ":" x-name CRLF
+
+//       iana-comp  = "BEGIN" ":" iana-token CRLF
+//                    1*contentline
+//                    "END" ":" iana-token CRLF
+
+//       component  = 1*(eventc / todoc / journalc / freebusyc /
+//                    timezonec / iana-comp / x-comp)
+//
 void expect_component(std::istream &is) {
         NOT_IMPLEMENTED;
 }
+
+bool read_dquoted_value(std::istream &is) {
+        save_input_pos ptran(is);
+
+        if (!read_dquote(is))
+                return false;
+
+        while (!read_dquote(is)) {
+        }
+
+        if (!read_dquote(is))
+                return false;
+
+        ptran.commit();
+        return true;
+}
+
+// altrepparam = "ALTREP" "=" DQUOTE uri DQUOTE
+bool read_altrepparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ALTREP") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+// cnparam    = "CN" "=" param-value
+bool read_cnparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ALTREP") &&
+                read_token(is, "=") &&
+                read_param_value(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//      cutypeparam        = "CUTYPE" "="
+//                          ("INDIVIDUAL"   ; An individual
+//                         / "GROUP"        ; A group of individuals
+//                         / "RESOURCE"     ; A physical resource
+//                         / "ROOM"         ; A room resource
+//                         / "UNKNOWN"      ; Otherwise not known
+//                         / x-name         ; Experimental type
+//                         / iana-token)    ; Other IANA-registered
+//                                          ; type
+//       ; Default is INDIVIDUAL
+bool read_cutypeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "CUTYPE") &&
+                read_token(is, "=") &&
+                read_param_value(is) &&
+                (
+                        read_token(is, "INDIVIDUAL") ||
+                        read_token(is, "GROUP") ||
+                        read_token(is, "RESOURCE") ||
+                        read_token(is, "ROOM") ||
+                        read_token(is, "UNKNOWN") ||
+                        read_x_name(is) ||
+                        read_iana_token(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//      delfromparam       = "DELEGATED-FROM" "=" DQUOTE cal-address DQUOTE
+//                           *("," DQUOTE cal-address DQUOTE)
+bool read_delfromparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "DELEGATED-FROM") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_dquoted_value(is))
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+
+//      deltoparam = "DELEGATED-TO" "=" DQUOTE cal-address DQUOTE
+//                    *("," DQUOTE cal-address DQUOTE)
+bool read_deltoparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "DELEGATED-TO") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_dquoted_value(is))
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+
+//      dirparam   = "DIR" "=" DQUOTE uri DQUOTE
+bool read_dirparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "DIR") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+// encodingparam =
+//          "ENCODING" "="
+//          ( "8BIT"   ; "8bit" text encoding is defined in [RFC2045]
+//          / "BASE64" ; "BASE64" binary encoding format is defined in [RFC4648]
+//          )
+bool read_encodingparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ENCODING") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "8BIT") ||
+                        read_token(is, "BASE64")
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       fmttypeparam = "FMTTYPE" "=" type-name "/" subtype-name
+//                      ; Where "type-name" and "subtype-name" are
+//                      ; defined in Section 4.2 of [RFC4288].
+bool read_fmttypeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "FMTTYPE") &&
+                read_token(is, "=") &&
+                (
+                        read_type_name(is) ||
+                        read_subtype_name(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       fbtypeparam        = "FBTYPE" "="
+//                          ( "FREE"
+//                          / "BUSY"
+//                          / "BUSY-UNAVAILABLE"
+//                          / "BUSY-TENTATIVE"
+//                          / x-name
+//                ; Some experimental iCalendar free/busy type.
+//                          / iana-token
+//                          )
+//                ; Some other IANA-registered iCalendar free/busy type.
+bool read_fbtypeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "FBTYPE") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "FREE") ||
+                        read_token(is, "BUSY") ||
+                        read_token(is, "BUSY-UNAVAILABLE") ||
+                        read_token(is, "BUSY-TENTATIVE") ||
+                        read_x_name(is) ||
+                        read_iana_token(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       languageparam = "LANGUAGE" "=" language
+//
+//       language = Language-Tag
+//                  ; As defined in [RFC5646].
+bool read_languageparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "LANGUAGE") &&
+                read_token(is, "=") &&
+                read_language_tag(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       memberparam        = "MEMBER" "=" DQUOTE cal-address DQUOTE
+//                            *("," DQUOTE cal-address DQUOTE)
+bool read_memberparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "LANGUAGE") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_dquoted_value(is))
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+
+
+//       partstat-jour    = ("NEEDS-ACTION"    ; Journal needs action
+//                        / "ACCEPTED"         ; Journal accepted
+//                        / "DECLINED"         ; Journal declined
+//                        / x-name             ; Experimental status
+//                        / iana-token)        ; Other IANA-registered
+//                                             ; status
+//       ; These are the participation statuses for a "VJOURNAL".
+//       ; Default is NEEDS-ACTION.
+bool read_partstat_jour(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//
+//       partstat-todo    = ("NEEDS-ACTION"    ; To-do needs action
+//                        / "ACCEPTED"         ; To-do accepted
+//                        / "DECLINED"         ; To-do declined
+//                        / "TENTATIVE"        ; To-do tentatively
+//                                             ; accepted
+//                        / "DELEGATED"        ; To-do delegated
+//                        / "COMPLETED"        ; To-do completed
+//                                             ; COMPLETED property has
+//                                             ; DATE-TIME completed
+//                        / "IN-PROCESS"       ; To-do in process of
+//                                             ; being completed
+//                        / x-name             ; Experimental status
+//                        / iana-token)        ; Other IANA-registered
+//                                             ; status
+//       ; These are the participation statuses for a "VTODO".
+//       ; Default is NEEDS-ACTION.
+bool read_partstat_todo(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       partstat-event   = ("NEEDS-ACTION"    ; Event needs action
+//                        / "ACCEPTED"         ; Event accepted
+//                        / "DECLINED"         ; Event declined
+//                        / "TENTATIVE"        ; Event tentatively
+//                                             ; accepted
+//                        / "DELEGATED"        ; Event delegated
+//                        / x-name             ; Experimental status
+//                        / iana-token)        ; Other IANA-registered
+//                                             ; status
+//       ; These are the participation statuses for a "VEVENT".
+//       ; Default is NEEDS-ACTION.
+bool read_partstat_event(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       partstatparam    = "PARTSTAT" "="
+//                         (partstat-event
+//                        / partstat-todo
+//                        / partstat-jour)
+bool read_partstatparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "PARTSTAT") &&
+                read_token(is, "=") &&
+                (
+                        read_partstat_event(is) ||
+                        read_partstat_todo(is) ||
+                        read_partstat_jour(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       rangeparam = "RANGE" "=" "THISANDFUTURE"
+//       ; To specify the instance specified by the recurrence identifier
+//       ; and all subsequent recurrence instances.
+bool read_rangeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RANGE") &&
+                read_token(is, "=") &&
+                read_token(is, "THISANDFUTURE");
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       trigrelparam       = "RELATED" "="
+//                          ( "START"       ; Trigger off of start
+//                          / "END")        ; Trigger off of end
+bool read_trigrelparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RELATED") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "START") ||
+                        read_token(is, "END")
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       reltypeparam       = "RELTYPE" "="
+//                           ("PARENT"    ; Parent relationship - Default
+//                          / "CHILD"     ; Child relationship
+//                          / "SIBLING"   ; Sibling relationship
+//                          / iana-token  ; Some other IANA-registered
+//                                        ; iCalendar relationship type
+//                          / x-name)     ; A non-standard, experimental
+//                                        ; relationship type
+bool read_reltypeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RELTYPE") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "PARENT") ||
+                        read_token(is, "CHILD") ||
+                        read_token(is, "SIBLING") ||
+                        read_iana_token(is) ||
+                        read_x_name(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       roleparam  = "ROLE" "="
+//                   ("CHAIR"             ; Indicates chair of the
+//                                        ; calendar entity
+//                  / "REQ-PARTICIPANT"   ; Indicates a participant whose
+//                                        ; participation is required
+//                  / "OPT-PARTICIPANT"   ; Indicates a participant whose
+//                                        ; participation is optional
+//                  / "NON-PARTICIPANT"   ; Indicates a participant who
+//                                        ; is copied for information
+//                                        ; purposes only
+//                  / x-name              ; Experimental role
+//                  / iana-token)         ; Other IANA role
+//       ; Default is REQ-PARTICIPANT
+bool read_roleparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ROLE") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "CHAIR") ||
+                        read_token(is, "REQ-PARTICIPANT") ||
+                        read_token(is, "OPT-PARTICIPANT") ||
+                        read_token(is, "NON-PARTICIPANT") ||
+                        read_x_name(is) ||
+                        read_iana_token(is)
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       rsvpparam = "RSVP" "=" ("TRUE" / "FALSE")
+//       ; Default is FALSE
+bool read_rsvpparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RSVP") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "TRUE") ||
+                        read_token(is, "FALSE")
+                );
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       sentbyparam        = "SENT-BY" "=" DQUOTE cal-address DQUOTE
+bool read_sentbyparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "SENT-BY") &&
+                read_token(is, "=") &&
+                read_dquoted_value(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       tzidprefix = "/"
+bool read_tzidprefix(std::istream &is) {
+        return read_token(is, "/");
+}
+bool read_optional_tzidprefix(std::istream &is) {
+        read_tzidprefix(is);
+        return true;
+}
+
+//       tzidparam  = "TZID" "=" [tzidprefix] paramtext
+bool read_tzidparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "TZID") &&
+                read_token(is, "=") &&
+                read_optional_tzidprefix(is) &&
+                read_paramtext(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       valuetype  =("BINARY"
+//                  / "BOOLEAN"
+//                  / "CAL-ADDRESS"
+//                  / "DATE"
+//                  / "DATE-TIME"
+//                  / "DURATION"
+//                  / "FLOAT"
+//                  / "INTEGER"
+//                  / "PERIOD"
+//                  / "RECUR"
+//                  / "TEXT"
+//                  / "TIME"
+//                  / "URI"
+//                  / "UTC-OFFSET"
+//                  / x-name
+//                  ; Some experimental iCalendar value type.
+//                  / iana-token)
+//                  ; Some other IANA-registered iCalendar value type.
+bool read_valuetype(std::istream &is) {
+        return read_token(is, "BINARY") ||
+               read_token(is, "BOOLEAN") ||
+               read_token(is, "CAL-ADDRESS") ||
+               read_token(is, "DATE") ||
+               read_token(is, "DATE-TIME") ||
+               read_token(is, "DURATION") ||
+               read_token(is, "FLOAT") ||
+               read_token(is, "INTEGER") ||
+               read_token(is, "PERIOD") ||
+               read_token(is, "RECUR") ||
+               read_token(is, "TEXT") ||
+               read_token(is, "TIME") ||
+               read_token(is, "URI") ||
+               read_token(is, "UTC-OFFSET") ||
+               read_x_name(is) ||
+               read_iana_token(is);
+}
+
+//       valuetypeparam = "VALUE" "=" valuetype
+bool read_valuetypeparam(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "VALUE") &&
+                read_token(is, "=") &&
+                read_valuetype(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//     iana-param  = iana-token "=" param-value *("," param-value)
+//     ; Some other IANA-registered iCalendar parameter.
+bool read_iana_param(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//     x-param     = x-name "=" param-value *("," param-value)
+//     ; A non-standard, experimental parameter.
+bool read_x_param(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+
+//     other-param   = (iana-param / x-param)
+bool read_other_param(std::istream &is) {
+        return read_iana_param(is) || read_x_param(is);
+}
+
 
 //     icalparameter = altrepparam       ; Alternate text representation
 //                   / cnparam           ; Common name
@@ -1127,15 +1752,31 @@ void expect_component(std::istream &is) {
 //                   / valuetypeparam    ; Property value data type
 //                   / other-param
 void expect_icalparameter(std::istream &is) {
-        NOT_IMPLEMENTED;
+        if (!read_icalparameter(is))
+                throw syntax_error();
 }
 bool read_icalparameter(std::istream &is) {
-        try {
-                expect_icalparameter(is);
-                return true;
-        } catch (syntax_error &) {
-                return false;
-        }
+        return read_altrepparam(is)
+            || read_cnparam(is)
+            || read_cutypeparam(is)
+            || read_delfromparam(is)
+            || read_deltoparam(is)
+            || read_dirparam(is)
+            || read_encodingparam(is)
+            || read_fmttypeparam(is)
+            || read_fbtypeparam(is)
+            || read_languageparam(is)
+            || read_memberparam(is)
+            || read_partstatparam(is)
+            || read_rangeparam(is)
+            || read_trigrelparam(is)
+            || read_reltypeparam(is)
+            || read_roleparam(is)
+            || read_rsvpparam(is)
+            || read_sentbyparam(is)
+            || read_tzidparam(is)
+            || read_valuetypeparam(is)
+            || read_other_param(is);
 }
 
 #include <fstream>
