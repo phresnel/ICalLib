@@ -80,8 +80,12 @@ private:
 
         std::vector<const char*> entries_;
 };
+
+/*
 CallStack callStack;
 #define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
+//*/
+#define CALLSTACK
 
 #define NOT_IMPLEMENTED do{throw not_implemented(__func__);}while(false)
 
@@ -193,6 +197,7 @@ public:
 
 // -- Parser Helpers. ----------------------------------------------------------
 void expect_token(std::istream &is, string const &tok) {
+        CALLSTACK;
         save_input_pos ptran(is);
         for (auto &c : tok) {
                 const auto i = is.get();
@@ -207,6 +212,7 @@ void expect_token(std::istream &is, string const &tok) {
 }
 
 bool read_token(std::istream &is, string const &tok) {
+        CALLSTACK;
         try {
                 expect_token(is, tok);
                 return true;
@@ -346,16 +352,19 @@ bool read_alnum(std::istream &is) {
 // -- Media Type (RFC 4288) Parser Helpers. ------------------------------------
 //       type-name = reg-name
 bool read_type_name(std::istream &) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       subtype-name = reg-name
 bool read_subtype_name(std::istream &) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       reg-name = 1*127reg-name-chars
 bool read_reg_name(std::istream &) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -363,6 +372,7 @@ bool read_reg_name(std::istream &) {
 //                       "#" / "$" / "&" / "." /
 //                       "+" / "-" / "^" / "_"
 bool read_reg_name_char(std::istream &) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -441,6 +451,7 @@ bool read_reg_name_char(std::istream &) {
 //               / privateuse          ; private use tag
 //               / grandfathered       ; grandfathered tags
 bool read_language_tag(std::istream &) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -474,6 +485,7 @@ void expect_key_value(std::istream &is, string const &k, string const &v) {
 }
 
 bool read_key_value(std::istream &is, string const &k, string const &v) {
+        CALLSTACK;
         try {
                 expect_key_value(is, k, v);
                 return true;
@@ -620,6 +632,7 @@ bool read_iana_token(std::istream &is) {
                 return false;
         while (read_iana_token_char(is))
                 ;
+        // TODO: IANA iCalendar identifiers
         return true;
 }
 void expect_iana_token(std::istream &is) {
@@ -815,7 +828,7 @@ bool read_value_char(std::istream &is) {
         }
 
         // NON-US-ASCII
-        std::cerr << "todo: non-us-ascii" << std::endl;
+        //std::cerr << "todo: non-us-ascii" << std::endl;
         return false;
 }
 
@@ -877,7 +890,9 @@ bool read_ical(std::istream &is) {
 void expect_icalbody(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        std::cerr << "expect_calprops()...\n";
         expect_calprops(is);
+        std::cerr << "expect_component()...\n";
         expect_component(is);
         ptran.commit();
 }
@@ -913,9 +928,9 @@ bool read_calprop(std::istream &is) {
 void expect_calprops(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_calprop(is))
-                ;
-        std::cerr << "expect_calprops() does not test semantics\n";
+        while (read_calprop(is)) {
+        }
+        //std::cerr << "expect_calprops() /test semantics\n";
         ptran.commit();
 }
 
@@ -928,6 +943,7 @@ void expect_prodid(std::istream &is) {
         expect_pidvalue(is);
         expect_newline(is);
         ptran.commit();
+        std::cerr << " <-- PRODID" << std::endl;
 }
 bool read_prodid(std::istream &is) {
         try {
@@ -947,6 +963,8 @@ void expect_version(std::istream &is) {
         expect_vervalue(is);
         expect_newline(is);
         ptran.commit();
+
+        std::cerr << " <-- VERSION" << std::endl;
 }
 bool read_version(std::istream &is) {
         try {
@@ -987,6 +1005,7 @@ void expect_calscale(std::istream &is) {
         expect_calvalue(is);
         expect_newline(is);
         ptran.commit();
+        std::cerr << " <-- CALSCALE" << std::endl;
 }
 bool read_calscale(std::istream &is) {
         try {
@@ -1027,6 +1046,7 @@ void expect_method(std::istream &is) {
         expect_metvalue(is);
         expect_newline(is);
         ptran.commit();
+        std::cerr << " <-- METHOD" << std::endl;
 }
 
 //       metparam   = *(";" other-param)
@@ -1052,6 +1072,7 @@ void expect_x_prop(std::istream &is) {
         expect_value(is);
         expect_newline(is);
         ptran.commit();
+        std::cerr << " <-- X-PROP" << std::endl;
 }
 bool read_x_prop(std::istream &is) {
         try {
@@ -1104,8 +1125,10 @@ void expect_iana_prop(std::istream &is) {
         expect_value(is);
         expect_newline(is);
         ptran.commit();
+        std::cerr << " <-- IANA-PROP" << std::endl;
 }
 bool read_iana_prop(std::istream &is) {
+        return false; // TODO
         try {
                 expect_iana_prop(is);
                 return true;
@@ -1266,7 +1289,7 @@ bool read_tsafe_char(std::istream &is) {
         }
 
         // NON-US-ASCII
-        std::cerr << "todo: non-us-ascii" << std::endl;
+        //std::cerr << "todo: non-us-ascii" << std::endl;
         return false;
 }
 
@@ -1378,6 +1401,8 @@ bool read_alarmc(std::istream &is) {
 //                  ;
 //                  )
 bool read_eventprop(std::istream &is) {
+        std::cerr << " read_eventprop\n";
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -1385,12 +1410,17 @@ bool read_eventprop(std::istream &is) {
 //                    eventprop *alarmc
 //                    "END" ":" "VEVENT" CRLF
 bool read_eventc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
+        std::cerr << " read_eventc\n";
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VEVENT") &&
                 read_eventprop(is);
-        if (!success_pro)
+        if (!success_pro) {
+                std::cerr << " read_eventc: success_pro=false\n";
                 return false;
+        }
+        std::cerr << " read_eventc: success_pro=true\n";
 
         while(read_alarmc(is)) {
         }
@@ -1466,6 +1496,8 @@ bool read_todoc(std::istream &is) {
                 return false;
 
         ptran.commit();
+
+        std::cerr << " <-- TODO" << std::endl;
         return true;
 }
 
@@ -1497,6 +1529,7 @@ bool read_todoc(std::istream &is) {
 //                  ;
 //                  )
 bool read_jourprop(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -1741,8 +1774,11 @@ void expect_component_single(std::istream &is) {
 void expect_component(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        std::cerr << " expect_component: 1st\n";
         expect_component_single(is);
+        std::cerr << " got 1st component\n";
         while(read_component_single(is)) {
+                std::cerr << " expect_component: n'th\n";
         }
         ptran.commit();
 }
@@ -2318,10 +2354,11 @@ int main() {
                                 col = 1;
                                 ++line;
                         } else {
-                                f.get();
+                                auto g = f.get();
+                                //std::cout << "[" << (char)g << "]";
                         }
                 }
-                std::cerr << "in line " << line << ":" << col << "\n";
+                std::cerr << " (in line " << line << ":" << col << ")\n";
         } catch (std::exception &e) {
                 std::cerr << "unknown error:" << e.what();
         }
