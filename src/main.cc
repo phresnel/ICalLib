@@ -14,6 +14,74 @@
 #include <istream>
 #include <iostream> // TODO: Remove iostream include.
 #include <string>
+#include <vector>
+
+class CallStack {
+public:
+        class Entry {
+        public:
+                Entry() = delete;
+                Entry(Entry const &) = delete;
+                Entry& operator= (Entry const &) = delete;
+
+                Entry(Entry &&other) {
+                        entries_ = other.entries_;
+                        other.entries_ = nullptr;
+                }
+                Entry& operator= (Entry &&other) {
+                        entries_ = other.entries_;
+                        other.entries_ = nullptr;
+                }
+
+                Entry(std::vector<const char*> &entries, const char *what)
+                        : entries_(&entries)
+                {
+                        entries_->push_back(what);
+
+                        std::cerr << "  ";
+                        for (auto i=0; i<entries_->size(); ++i)
+                                std::cerr << "  ";
+                        std::cerr << "entered " << what << "\n";
+                }
+                ~Entry() {
+                        if (entries_)
+                                entries_->pop_back();
+                }
+        private:
+                friend class CallStack;
+                std::vector<const char*> *entries_;
+        };
+
+        CallStack() = default;
+        CallStack(CallStack const&) = default;
+        CallStack& operator= (CallStack const&) = default;
+
+        Entry push(const char* name) {
+                Entry ret {entries_, name};
+                //std::cerr << *this;
+                return std::move(ret);
+        }
+
+        friend std::ostream& operator<< (
+                std::ostream& os, CallStack const &cs
+        ) {
+                os << "CallStack{\n";
+                for (auto i=0; i!=cs.entries_.size(); ++i) {
+                        /*os << " ..";
+                        for (auto x=0; x!=i; ++x) {
+                                os << "..";
+                        }*/
+                        os << "  " << cs.entries_[i] << "\n";
+                }
+                os << "}\n";
+                return os;
+        }
+private:
+
+        std::vector<const char*> entries_;
+};
+CallStack callStack;
+#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
 
 #define NOT_IMPLEMENTED do{throw not_implemented(__func__);}while(false)
 
@@ -35,28 +103,43 @@ public:
 
 class syntax_error : public std::runtime_error {
 public:
-        syntax_error() : std::runtime_error("Syntax error.") {}
-        syntax_error(std::string const &msg) : std::runtime_error(msg) {}
+        syntax_error(std::istream &is) :
+                std::runtime_error("Syntax error."),
+                pos(is.tellg())
+                {}
+
+        syntax_error(std::istream &is, std::string const &msg) :
+                std::runtime_error(msg),
+                pos(is.tellg())
+                {}
+
+        std::istream::pos_type pos = 0;
 };
 
 class unexpected_token : public syntax_error {
 public:
-        unexpected_token() : syntax_error() {}
-        unexpected_token(std::istream const &is, string const &tok)
-                : syntax_error("Expected token '" + tok + "' not found")
-        {}
+        unexpected_token(std::istream &is) :
+                syntax_error(is)
+                {}
+
+        unexpected_token(std::istream &is, string const &tok) :
+                syntax_error(is, "Expected token '" + tok + "' not found")
+                {}
 };
 
 class key_value_pair_expected : public syntax_error {
 public:
-        key_value_pair_expected()
-                : syntax_error("Expected key-value-pair") {}
+        key_value_pair_expected(std::istream &is) :
+                syntax_error(is, "Expected key-value-pair")
+                {}
 
-        key_value_pair_expected(std::istream const &is,
+        key_value_pair_expected(std::istream &is,
                                 string const &k,
                                 string const &v)
-                : syntax_error("Expected key-value-pair '" + k + ":" + v + "'")
-        {}
+                : syntax_error(
+                        is,
+                        "Expected key-value-pair '" + k + ":" + v + "'")
+                {}
 };
 
 
@@ -138,7 +221,7 @@ void expect_newline(std::istream &is) {
             !read_token(is, "\n") &&
             !read_token(is, "\r"))
         {
-                throw unexpected_token();
+                throw unexpected_token(is);
         }
 }
 
@@ -157,7 +240,7 @@ void expect_alpha(std::istream &is) {
         switch(i) {
         default:
         case EOF:
-                throw syntax_error();
+                throw syntax_error(is);
         case 'a':
         case 'b':
         case 'c':
@@ -229,7 +312,7 @@ void expect_digit(std::istream &is) {
         save_input_pos ptran(is);
         const auto i = is.get();
         if (i<'0' || i>'9')
-                throw syntax_error("expected digit");
+                throw syntax_error(is, "expected digit");
         ptran.commit();
 }
 
@@ -246,7 +329,7 @@ void expect_alnum(std::istream &is) {
         save_input_pos ptran(is);
         const auto success = read_alpha(is) || read_digit(is);
         if (!success) {
-                throw syntax_error("expected alpha or digit");
+                throw syntax_error(is, "expected alpha or digit");
         }
         ptran.commit();
 }
@@ -465,7 +548,7 @@ bool read_iana_prop(std::istream &);
 void expect_iana_prop(std::istream &);
 
 void expect_component(std::istream &is);
-void expect_content_line(std::istream &);
+void expect_contentline(std::istream &is);
 void expect_name(std::istream &);
 
 bool read_iana_token(std::istream &);
@@ -497,7 +580,7 @@ void expect_icalparameter(std::istream &);
 
 
 //    contentline   = name *(";" param ) ":" value CRLF
-void expect_content_line(std::istream &is) {
+void expect_contentline(std::istream &is) {
         save_input_pos ts(is);
         expect_name(is);
         while (read_token(is, ";")) {
@@ -508,6 +591,14 @@ void expect_content_line(std::istream &is) {
         expect_newline(is);
         ts.commit();
 }
+bool read_contentline(std::istream &is) {
+        try {
+                expect_contentline(is);
+                return true;
+        } catch (syntax_error &) {
+                return false;
+        }
+}
 
 //     name          = iana-token / x-name
 void expect_name(std::istream &is) {
@@ -515,7 +606,7 @@ void expect_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw syntax_error("expected iana-token or x-name");
+                throw syntax_error(is, "expected iana-token or x-name");
         }
 }
 
@@ -533,7 +624,7 @@ bool read_iana_token(std::istream &is) {
 }
 void expect_iana_token(std::istream &is) {
         if (!read_iana_token(is))
-                throw unexpected_token();
+                throw unexpected_token(is);
 }
 
 //     vendorid      = 3*(ALPHA / DIGIT)
@@ -580,7 +671,7 @@ void expect_param_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw syntax_error("expected param-name");
+                throw syntax_error(is, "expected param-name");
         }
 }
 
@@ -591,7 +682,7 @@ bool read_param_value(std::istream &is) {
 }
 void expect_param_value(std::istream &is) {
         if (!read_param_value(is))
-                throw syntax_error();
+                throw syntax_error(is);
 }
 
 //     paramtext     = *SAFE-CHAR
@@ -765,6 +856,7 @@ void expect_value(std::istream &is) {
 //                  icalbody
 //                  "END" ":" "VCALENDAR" CRLF
 void expect_ical(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_key_value(is, "BEGIN", "VCALENDAR");
         expect_icalbody(is);
@@ -783,6 +875,7 @@ bool read_ical(std::istream &is) {
 
 //       icalbody   = calprops component
 void expect_icalbody(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_calprops(is);
         expect_component(is);
@@ -818,6 +911,7 @@ bool read_calprop(std::istream &is) {
         return success;
 }
 void expect_calprops(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_calprop(is))
                 ;
@@ -976,7 +1070,7 @@ void expect_x_name(std::istream &is) {
 
         // "X-"
         if (!read_token(is, "X-"))
-                throw syntax_error();
+                throw syntax_error(is);
 
         // [vendorid "-"]
         if (read_vendorid(is)) {
@@ -985,7 +1079,7 @@ void expect_x_name(std::istream &is) {
 
         // 1*(ALPHA / DIGIT / "-")
         if (!read_alnum(is) && !read_token(is, "-"))
-                throw syntax_error();
+                throw syntax_error(is);
         while (read_alnum(is) || read_token(is, "-")) {
         }
 
@@ -1210,19 +1304,447 @@ bool read_text(std::istream &is) {
         }
 }
 
-//       x-comp     = "BEGIN" ":" x-name CRLF
-//                    1*contentline
-//                    "END" ":" x-name CRLF
+//       audioprop  = *(
+//                  ;
+//                  ; 'action' and 'trigger' are both REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  action / trigger /
+//                  ;
+//                  ; 'duration' and 'repeat' are both OPTIONAL,
+//                  ; and MUST NOT occur more than once each;
+//                  ; but if one occurs, so MUST the other.
+//                  ;
+//                  duration / repeat /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  attach /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  x-prop / iana-prop
+//                  ;
+//                  )
+//       alarmc     = "BEGIN" ":" "VALARM" CRLF
+//                    (audioprop / dispprop / emailprop)
+//                    "END" ":" "VALARM" CRLF
+bool read_alarmc(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       eventprop  = *(
+//                  ;
+//                  ; The following are REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  dtstamp / uid /
+//                  ;
+//                  ; The following is REQUIRED if the component
+//                  ; appears in an iCalendar object that doesn't
+//                  ; specify the "METHOD" property; otherwise, it
+//                  ; is OPTIONAL; in any case, it MUST NOT occur
+//                  ; more than once.
+//                  ;
+//                  dtstart /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  class / created / description / geo /
+//                  last-mod / location / organizer / priority /
+//                  seq / status / summary / transp /
+//                  url / recurid /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but SHOULD NOT occur more than once.
+//                  ;
+//                  rrule /
+//                  ;
+//                  ; Either 'dtend' or 'duration' MAY appear in
+//                  ; a 'eventprop', but 'dtend' and 'duration'
+//                  ; MUST NOT occur in the same 'eventprop'.
+//                  ;
+//                  dtend / duration /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attach / attendee / categories / comment /
+//                  contact / exdate / rstatus / related /
+//                  resources / rdate / x-prop / iana-prop
+//                  ;
+//                  )
+bool read_eventprop(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       eventc     = "BEGIN" ":" "VEVENT" CRLF
+//                    eventprop *alarmc
+//                    "END" ":" "VEVENT" CRLF
+bool read_eventc(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success_pro =
+                read_key_value(is, "BEGIN", "VEVENT") &&
+                read_eventprop(is);
+        if (!success_pro)
+                return false;
+
+        while(read_alarmc(is)) {
+        }
+
+        const auto success_epi =
+                read_key_value(is, "END", "VEVENT") ;
+        if (!success_epi)
+                return false;
+
+        ptran.commit();
+        return true;
+}
+
+
+//       todoprop   = *(
+//                  ;
+//                  ; The following are REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  dtstamp / uid /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  class / completed / created / description /
+//                  dtstart / geo / last-mod / location / organizer /
+//                  percent / priority / recurid / seq / status /
+//                  summary / url /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but SHOULD NOT occur more than once.
+//                  ;
+//                  rrule /
+//                  ;
+//                  ; Either 'due' or 'duration' MAY appear in
+//                  ; a 'todoprop', but 'due' and 'duration'
+//                  ; MUST NOT occur in the same 'todoprop'.
+//                  ; If 'duration' appear in a 'todoprop',
+//                  ; then 'dtstart' MUST also appear in
+//                  ; the same 'todoprop'.
+//                  ;
+//                  due / duration /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attach / attendee / categories / comment / contact /
+//                  exdate / rstatus / related / resources /
+//                  rdate / x-prop / iana-prop
+//                  ;
+//                  )
+bool read_todoprop(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       todoc      = "BEGIN" ":" "VTODO" CRLF
+//                    todoprop *alarmc
+//                    "END" ":" "VTODO" CRLF
+bool read_todoc(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success_pro =
+                read_key_value(is, "BEGIN", "VTODO") &&
+                read_todoprop(is);
+        if (!success_pro)
+                return false;
+
+        while(read_alarmc(is)) {
+        }
+
+        const auto success_epi =
+                read_key_value(is, "END", "VTODO") ;
+        if (!success_epi)
+                return false;
+
+        ptran.commit();
+        return true;
+}
+
+//       jourprop   = *(
+//                  ;
+//                  ; The following are REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  dtstamp / uid /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  class / created / dtstart /
+//                  last-mod / organizer / recurid / seq /
+//                  status / summary / url /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but SHOULD NOT occur more than once.
+//                  ;
+//                  rrule /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attach / attendee / categories / comment /
+//                  contact / description / exdate / related / rdate /
+//                  rstatus / x-prop / iana-prop
+//                  ;
+//                  )
+bool read_jourprop(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       journalc   = "BEGIN" ":" "VJOURNAL" CRLF
+//                    jourprop
+//                    "END" ":" "VJOURNAL" CRLF
+bool read_journalc(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_key_value(is, "BEGIN", "VJOURNAL") &&
+                read_jourprop(is) &&
+                read_key_value(is, "END", "VJOURNAL") ;
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       fbprop     = *(
+//                  ;
+//                  ; The following are REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  dtstamp / uid /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  contact / dtstart / dtend /
+//                  organizer / url /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attendee / comment / freebusy / rstatus / x-prop /
+//                  iana-prop
+//                  ;
+//                  )
+bool read_fbprop(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       freebusyc  = "BEGIN" ":" "VFREEBUSY" CRLF
+//                    fbprop
+//                    "END" ":" "VFREEBUSY" CRLF
+bool read_freebusyc(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success =
+                read_key_value(is, "BEGIN", "VFREEBUSY") &&
+                read_fbprop(is) &&
+                read_key_value(is, "END", "VFREEBUSY") ;
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+
+
+bool read_tzid(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+bool read_last_mod(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+bool read_tzurl(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       tzprop     = *(
+//                    ;
+//                    ; The following are REQUIRED,
+//                    ; but MUST NOT occur more than once.
+//                    ;
+//                    dtstart / tzoffsetto / tzoffsetfrom /
+//                    ;
+//                    ; The following is OPTIONAL,
+//                    ; but SHOULD NOT occur more than once.
+//                    ;
+//                    rrule /
+//                    ;
+//                    ; The following are OPTIONAL,
+//                    ; and MAY occur more than once.
+//                    ;
+//                    comment / rdate / tzname / x-prop / iana-prop
+//                    ;
+//                    )
+bool read_tzprop(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       daylightc  = "BEGIN" ":" "DAYLIGHT" CRLF
+//                    tzprop
+//                    "END" ":" "DAYLIGHT" CRLF
+bool read_daylightc(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       standardc  = "BEGIN" ":" "STANDARD" CRLF
+//                    tzprop
+//                    "END" ":" "STANDARD" CRLF
+bool read_standardc(std::istream &is) {
+        NOT_IMPLEMENTED;
+}
+
+//       timezonec  = "BEGIN" ":" "VTIMEZONE" CRLF
+//                    *(
+//                    ;
+//                    ; 'tzid' is REQUIRED, but MUST NOT occur more
+//                    ; than once.
+//                    ;
+//                    tzid /
+//                    ;
+//                    ; 'last-mod' and 'tzurl' are OPTIONAL,
+//                    ; but MUST NOT occur more than once.
+//                    ;
+//                    last-mod / tzurl /
+//                    ;
+//                    ; One of 'standardc' or 'daylightc' MUST occur
+//                    ; and each MAY occur more than once.
+//                    ;
+//                    standardc / daylightc /
+//                    ;
+//                    ; The following are OPTIONAL,
+//                    ; and MAY occur more than once.
+//                    ;
+//                    x-prop / iana-prop
+//                    ;
+//                    )
+//                    "END" ":" "VTIMEZONE" CRLF
+bool read_timezonec(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success_pro =
+                read_key_value(is, "BEGIN", "VTIMEZONE") &&
+                read_todoprop(is);
+        if (!success_pro)
+                return false;
+
+        while(read_tzid(is) ||
+              read_last_mod(is) ||
+              read_tzurl(is) ||
+              read_standardc(is) ||
+              read_daylightc(is) ||
+              read_x_prop(is) ||
+              read_iana_prop(is)) {
+        }
+
+        const auto success_epi =
+                read_key_value(is, "END", "VTIMEZONE") ;
+        if (!success_epi)
+                return false;
+
+        ptran.commit();
+        return true;
+}
 
 //       iana-comp  = "BEGIN" ":" iana-token CRLF
 //                    1*contentline
 //                    "END" ":" iana-token CRLF
+bool read_iana_comp(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success_pro =
+                read_token(is, "BEGIN") &&
+                read_token(is, ":") &&
+                read_iana_token(is) &&
+                read_newline(is);
+        if (!success_pro)
+                return false;
+
+        if (!read_contentline(is))
+                return false;
+        while(read_contentline(is)) {
+        }
+
+        const auto success_epi =
+                read_token(is, "END") &&
+                read_token(is, ":") &&
+                read_iana_token(is) &&
+                read_newline(is);
+        if (!success_epi)
+                return false;
+
+        ptran.commit();
+        return true;
+}
+
+//       x-comp     = "BEGIN" ":" x-name CRLF
+//                    1*contentline
+//                    "END" ":" x-name CRLF
+bool read_x_comp(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto success_pro =
+                read_token(is, "BEGIN") &&
+                read_token(is, ":") &&
+                read_x_name(is) &&
+                read_newline(is);
+        if (!success_pro)
+                return false;
+
+        if (!read_contentline(is))
+                return false;
+        while(read_contentline(is)) {
+        }
+
+        const auto success_epi =
+                read_token(is, "END") &&
+                read_token(is, ":") &&
+                read_x_name(is) &&
+                read_newline(is);
+        if (!success_epi)
+                return false;
+
+        ptran.commit();
+        return true;
+}
 
 //       component  = 1*(eventc / todoc / journalc / freebusyc /
 //                    timezonec / iana-comp / x-comp)
 //
+bool read_component_single(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success = read_eventc(is)
+                          || read_todoc(is)
+                          || read_journalc(is)
+                          || read_freebusyc(is)
+                          || read_timezonec(is)
+                          || read_iana_comp(is)
+                          || read_x_comp(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+void expect_component_single(std::istream &is) {
+        CALLSTACK;
+        if (!read_component_single(is))
+                throw syntax_error(is);
+}
 void expect_component(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
+        save_input_pos ptran(is);
+        expect_component_single(is);
+        while(read_component_single(is)) {
+        }
+        ptran.commit();
 }
 
 bool read_dquoted_value(std::istream &is) {
@@ -1753,7 +2275,7 @@ bool read_other_param(std::istream &is) {
 //                   / other-param
 void expect_icalparameter(std::istream &is) {
         if (!read_icalparameter(is))
-                throw syntax_error();
+                throw syntax_error(is);
 }
 bool read_icalparameter(std::istream &is) {
         return read_altrepparam(is)
@@ -1781,11 +2303,27 @@ bool read_icalparameter(std::istream &is) {
 
 #include <fstream>
 int main() {
+        CALLSTACK;
         std::ifstream f("dev-assets/f1calendar.com/2019_full.ics");
         try {
                 expect_ical(f);
+        } catch (syntax_error &e) {
+                std::cerr << "syntax-error:" << e.what();
+
+                const auto where = e.pos;
+                f.seekg(0);
+                int line = 1, col = 1;
+                while(f.tellg() < where) {
+                        if(read_newline(f)) {
+                                col = 1;
+                                ++line;
+                        } else {
+                                f.get();
+                        }
+                }
+                std::cerr << "in line " << line << ":" << col << "\n";
         } catch (std::exception &e) {
-                std::cerr << e.what();
+                std::cerr << "unknown error:" << e.what();
         }
         return 0;
 }
