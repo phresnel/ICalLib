@@ -1555,24 +1555,33 @@ void expect_icalbody(std::istream &is) {
 //                  x-prop / iana-prop
 //                  ;
 //                  )
-bool read_calprop(std::istream &is) {
-        CALLSTACK;
-        const auto success =
-                read_prodid(is) ||
-                read_version(is) ||
-                read_calscale(is) ||
-                read_method(is) ||
-                read_x_prop(is) ||
-                read_iana_prop(is);
-        return success;
-}
-void expect_calprops(std::istream &is) {
+CalProps expect_calprops(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_calprop(is)) {
+        CalProps ret;
+        int prodidc = 0,
+            versionc = 0,
+            calscalec = 0,
+            methodc = 0;
+        while (true) {
+                if (read_prodid(is)) {
+                        // ret.prodId = ...
+                        ++prodidc;
+                } else if (read_version(is)) {
+                        // ret.version = ...
+                        ++versionc;
+                } else if (read_calscale(is)) {
+                        ++calscalec;
+                } else if (read_method(is)) {
+                        ++methodc;
+                } else if (read_x_prop(is)) {
+                } else if (read_iana_prop(is)) {
+                } else {
+                        break;
+                }
         }
-        //std::cerr << "expect_calprops() /test semantics\n";
         ptran.commit();
+        return ret;
 }
 
 //       prodid     = "PRODID" pidparam ":" pidvalue CRLF

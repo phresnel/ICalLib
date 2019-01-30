@@ -16,13 +16,9 @@
 //   - [RFC 7986](https://tools.ietf.org/html/rfc7986)
 // - Tags for Identifying Languages:
 //   - [RFC 5646](https://tools.ietf.org/html/rfc5646)
-#include <istream>
-#include <string>
-#include <optional>
 
-using std::string;
-using std::optional;
-using std::nullopt;
+#include "ical.hh"
+#include <istream>
 
 // -- Typedefs. ----------------------------------------------------------------
 using string = std::string;
@@ -66,7 +62,7 @@ bool read_x_name(std::istream &);
 bool read_x_param(std::istream &);
 bool read_x_prop(std::istream &);
 void expect_calparam(std::istream &);
-void expect_calprops(std::istream &is);
+CalProps expect_calprops(std::istream &is);
 void expect_calscale(std::istream &);
 void expect_calvalue(std::istream &);
 void expect_component(std::istream &is);

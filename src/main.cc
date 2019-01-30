@@ -7,6 +7,7 @@ int main() {
         std::ifstream f("dev-assets/f1calendar.com/2019_full.ics");
         try {
                 expect_ical(f);
+                std::cout << "done." << std::endl;
         } catch (syntax_error &e) {
                 std::cerr << "syntax-error:" << e.what();
                 print_location(e.pos, f);
