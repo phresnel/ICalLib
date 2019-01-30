@@ -88,12 +88,12 @@ private:
         std::vector<const char*> entries_;
 };
 
-/*CallStack callStack;
-#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
+//CallStack callStack;
+//#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
 //*/
 #define CALLSTACK
 
-#define NOT_IMPLEMENTED do{throw not_implemented(is, __func__);}while(false)
+#define NOT_IMPLEMENTED do{throw not_implemented(is.tellg(), __func__);}while(false)
 
 // -- Typedefs. ----------------------------------------------------------------
 using string = std::string;
@@ -163,7 +163,23 @@ void expect_version(std::istream &);
 void expect_vervalue(std::istream &);
 void expect_x_name(std::istream &);
 void expect_x_prop(std::istream &);
+bool read_newline(std::istream &);
 
+void print_location(std::istream::pos_type pos, std::istream &is) {
+        const auto where = pos;
+        is.seekg(0);
+        int line = 1, col = 1;
+        while(is.tellg() < where) {
+                if(read_newline(is)) {
+                        col = 1;
+                        ++line;
+                } else {
+                        auto g = is.get();
+                        //std::cout << "[" << (char)g << "]";
+                }
+        }
+        std::cerr << " (in line " << line << ":" << col << ")\n";
+}
 
 // -- Exceptions. --------------------------------------------------------------
 class invalid_ical : public std::runtime_error {
@@ -173,8 +189,8 @@ public:
 
 class not_implemented : public std::runtime_error {
 public:
-        not_implemented(std::istream &is, std::string const &what) :
-                std::runtime_error("Not implemented: " + what), pos(is.tellg())
+        not_implemented(std::istream::pos_type pos, std::string const &what) :
+                std::runtime_error("Not implemented: " + what), pos(pos)
                 {}
 
         std::istream::pos_type pos = 0;
@@ -182,14 +198,14 @@ public:
 
 class syntax_error : public std::runtime_error {
 public:
-        syntax_error(std::istream &is) :
+        syntax_error(std::istream::pos_type pos) :
                 std::runtime_error("Syntax error."),
-                pos(is.tellg())
+                pos(pos)
                 {}
 
-        syntax_error(std::istream &is, std::string const &msg) :
+        syntax_error(std::istream::pos_type pos, std::string const &msg) :
                 std::runtime_error(msg),
-                pos(is.tellg())
+                pos(pos)
                 {}
 
         std::istream::pos_type pos = 0;
@@ -197,26 +213,24 @@ public:
 
 class unexpected_token : public syntax_error {
 public:
-        unexpected_token(std::istream &is) :
-                syntax_error(is)
-                {}
+        unexpected_token(std::istream::pos_type pos) : syntax_error(pos) {}
 
-        unexpected_token(std::istream &is, string const &tok) :
-                syntax_error(is, "Expected token '" + tok + "' not found")
+        unexpected_token(std::istream::pos_type pos, string const &tok) :
+                syntax_error(pos, "Expected token '" + tok + "' not found")
                 {}
 };
 
 class key_value_pair_expected : public syntax_error {
 public:
-        key_value_pair_expected(std::istream &is) :
-                syntax_error(is, "Expected key-value-pair")
+        key_value_pair_expected(std::istream::pos_type pos) :
+                syntax_error(pos, "Expected key-value-pair")
                 {}
 
-        key_value_pair_expected(std::istream &is,
+        key_value_pair_expected(std::istream::pos_type pos,
                                 string const &k,
                                 string const &v)
                 : syntax_error(
-                        is,
+                        pos,
                         "Expected key-value-pair '" + k + ":" + v + "'")
                 {}
 };
@@ -277,10 +291,10 @@ void expect_token(std::istream &is, string const &tok) {
         for (auto &c : tok) {
                 const auto i = is.get();
                 if(i == EOF) {
-                        throw unexpected_token(is, tok);
+                        throw unexpected_token(is.tellg(), tok);
                 }
                 if(i != c) {
-                        throw unexpected_token(is, tok);
+                        throw unexpected_token(is.tellg(), tok);
                 }
         }
         ptran.commit();
@@ -296,14 +310,24 @@ bool read_token(std::istream &is, string const &tok) {
         }
 }
 
+bool read_eof(std::istream &is) {
+        save_input_pos ptran(is);
+        const auto c = is.get();
+        if (c != EOF)
+               return false;
+        ptran.commit();
+        return true;
+}
+
 void expect_newline(std::istream &is) {
         CALLSTACK;
         // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
-        if (!read_token(is, "\r\n") &&
-            !read_token(is, "\n") &&
-            !read_token(is, "\r"))
-        {
-                throw unexpected_token(is);
+        if (!(read_token(is, "\r\n") ||
+              read_token(is, "\n") ||
+              read_token(is, "\r") ||
+              read_eof(is))
+        ) {
+                throw unexpected_token(is.tellg());
         }
 }
 
@@ -361,7 +385,7 @@ void expect_alpha(std::istream &is) {
         switch(i) {
         default:
         case EOF:
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
         case 'a':
         case 'b':
         case 'c':
@@ -435,7 +459,7 @@ void expect_digit(std::istream &is) {
         save_input_pos ptran(is);
         const auto i = is.get();
         if (i<'0' || i>'9')
-                throw syntax_error(is, "expected digit");
+                throw syntax_error(is.tellg(), "expected digit");
         ptran.commit();
 }
 
@@ -449,12 +473,29 @@ bool read_digit(std::istream &is) {
         }
 }
 
+bool read_digits(std::istream &is, int at_least, int at_most = -1) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        int c = 0;
+        while (read_digit(is) && (at_most<0 || c<at_most)) {
+                ++c;
+        }
+
+        if (at_least >= 0 && c<at_least)
+                return false;
+        if (at_most >= 0 && c>at_most)
+                return false;
+
+        ptran.commit();
+        return true;
+}
+
 void expect_alnum(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_alpha(is) || read_digit(is);
         if (!success) {
-                throw syntax_error(is, "expected alpha or digit");
+                throw syntax_error(is.tellg(), "expected alpha or digit");
         }
         ptran.commit();
 }
@@ -1144,7 +1185,7 @@ void expect_key_value(std::istream &is, string const &k, string const &v) {
                 read_token(is, v) &&
                 read_newline(is);
         if (!success)
-                throw key_value_pair_expected(is, k, v);
+                throw key_value_pair_expected(is.tellg(), k, v);
         ptran.commit();
 }
 
@@ -1223,7 +1264,7 @@ void expect_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw syntax_error(is, "expected iana-token or x-name");
+                throw syntax_error(is.tellg(), "expected iana-token or x-name");
         }
 }
 
@@ -1245,7 +1286,7 @@ bool read_iana_token(std::istream &is) {
 void expect_iana_token(std::istream &is) {
         CALLSTACK;
         if (!read_iana_token(is))
-                throw unexpected_token(is);
+                throw unexpected_token(is.tellg());
 }
 
 //     vendorid      = 3*(ALPHA / DIGIT)
@@ -1556,7 +1597,7 @@ void expect_param_name(std::istream &is) {
                 read_iana_token(is) ||
                 read_x_name(is);
         if (!success) {
-                throw syntax_error(is, "expected param-name");
+                throw syntax_error(is.tellg(), "expected param-name");
         }
 }
 
@@ -1569,7 +1610,7 @@ bool read_param_value(std::istream &is) {
 void expect_param_value(std::istream &is) {
         CALLSTACK;
         if (!read_param_value(is))
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
 }
 
 //     paramtext     = *SAFE-CHAR
@@ -1844,7 +1885,7 @@ void expect_x_name(std::istream &is) {
 
         // "X-"
         if (!read_token(is, "X-"))
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
 
         // [vendorid "-"]
         if (read_vendorid(is)) {
@@ -1853,7 +1894,7 @@ void expect_x_name(std::istream &is) {
 
         // 1*(ALPHA / DIGIT / "-")
         if (!read_alnum(is) && !read_token(is, "-"))
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
         while (read_alnum(is) || read_token(is, "-")) {
         }
 
@@ -2587,58 +2628,81 @@ bool read_date_time(std::istream &is) {
 //       dur-week   = 1*DIGIT "W"
 bool read_dur_week(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
-                false;
+                read_digits(is, 1) &&
+                read_token(is, "W");
         if (!success)
                 return false;
         ptran.commit();
         return true;
 }
-//       dur-hour   = 1*DIGIT "H" [dur-minute]
-bool read_dur_hour(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-//       dur-minute = 1*DIGIT "M" [dur-second]
-bool read_dur_minute(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
+
 //       dur-second = 1*DIGIT "S"
 bool read_dur_second(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
-                false;
+                read_digits(is, 1) &&
+                read_token(is, "S");
         if (!success)
                 return false;
         ptran.commit();
         return true;
 }
+
+//       dur-minute = 1*DIGIT "M" [dur-second]
+bool read_dur_minute(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_digits(is, 1) &&
+                read_token(is, "M") &&
+                (read_dur_second(is) || true);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       dur-hour   = 1*DIGIT "H" [dur-minute]
+bool read_dur_hour(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_digits(is, 1) &&
+                read_token(is, "H") &&
+                (read_dur_minute(is) || true);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
 //       dur-day    = 1*DIGIT "D"
 bool read_dur_day(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
-                false;
+                read_digits(is, 1) &&
+                read_token(is, "D");
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       dur-time   = "T" (dur-hour / dur-minute / dur-second)
+bool read_dur_time(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "T") &&
+                (
+                        read_dur_hour(is) ||
+                        read_dur_minute(is) ||
+                        read_dur_second(is)
+                );
         if (!success)
                 return false;
         ptran.commit();
@@ -2648,22 +2712,10 @@ bool read_dur_day(std::istream &is) {
 //       dur-date   = dur-day [dur-time]
 bool read_dur_date(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-//       dur-time   = "T" (dur-hour / dur-minute / dur-second)
-bool read_dur_time(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
+                read_dur_day(is) &&
+                (read_dur_time(is) || true);
         if (!success)
                 return false;
         ptran.commit();
@@ -2673,10 +2725,11 @@ bool read_dur_time(std::istream &is) {
 //       dur-value  = (["+"] / "-") "P" (dur-date / dur-time / dur-week)
 bool read_dur_value(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
-                false;
+                (read_token(is, "+") || read_token(is, "-") || true) &&
+                read_token(is, "P") &&
+                (read_dur_date(is) || read_dur_time(is) || read_dur_week(is));
         if (!success)
                 return false;
         ptran.commit();
@@ -2941,7 +2994,8 @@ bool read_created(std::istream &is) {
 //                   ; The following are OPTIONAL,
 //                   ; but MUST NOT occur more than once.
 //                   ;
-//                   (";" altrepparam) / (";" languageparam) /
+//                   (";" altrepparam) /
+//                   (";" languageparam) /
 //                   ;
 //                   ; The following is OPTIONAL,
 //                   ; and MAY occur more than once.
@@ -2951,8 +3005,13 @@ bool read_created(std::istream &is) {
 //                   )
 bool read_descparam(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                if (!(read_altrepparam(is) ||
+                      read_languageparam(is) ||
+                      read_other_param(is)))
+                        return false;
+        }
         ptran.commit();
         return true;
 }
@@ -5054,7 +5113,7 @@ bool read_component_single(std::istream &is) {
 void expect_component_single(std::istream &is) {
         CALLSTACK;
         if (!read_component_single(is))
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
 }
 void expect_component(std::istream &is) {
         CALLSTACK;
@@ -5589,7 +5648,7 @@ bool read_x_param(std::istream &is) {
 void expect_icalparameter(std::istream &is) {
         CALLSTACK;
         if (!read_icalparameter(is))
-                throw syntax_error(is);
+                throw syntax_error(is.tellg());
 }
 bool read_icalparameter(std::istream &is) {
         CALLSTACK;
@@ -5616,22 +5675,6 @@ bool read_icalparameter(std::istream &is) {
             || read_other_param(is);
 }
 
-void print_location(std::istream::pos_type pos, std::istream &is) {
-        CALLSTACK;
-        const auto where = pos;
-        is.seekg(0);
-        int line = 1, col = 1;
-        while(is.tellg() < where) {
-                if(read_newline(is)) {
-                        col = 1;
-                        ++line;
-                } else {
-                        auto g = is.get();
-                        //std::cout << "[" << (char)g << "]";
-                }
-        }
-        std::cerr << " (in line " << line << ":" << col << ")\n";
-}
 #include <fstream>
 int main() {
         CALLSTACK;
