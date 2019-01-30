@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 add_executable(
         supercal
         src/main.cc
+
+        include/parser.hh src/parser.cc
 )
+
+include_directories(include/)
 
 
 # ==============================================================================
