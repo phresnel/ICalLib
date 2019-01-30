@@ -17,6 +17,11 @@
 #include <iostream> // TODO: Remove iostream include.
 #include <string>
 #include <vector>
+#include <optional>
+
+using std::string;
+using std::optional;
+using std::nullopt;
 
 class CallStack {
 public:
@@ -83,16 +88,81 @@ private:
         std::vector<const char*> entries_;
 };
 
-/*
-CallStack callStack;
+/*CallStack callStack;
 #define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
 //*/
 #define CALLSTACK
 
-#define NOT_IMPLEMENTED do{throw not_implemented(__func__);}while(false)
+#define NOT_IMPLEMENTED do{throw not_implemented(is, __func__);}while(false)
 
 // -- Typedefs. ----------------------------------------------------------------
 using string = std::string;
+
+
+// -- Forward declarations. ----------------------------------------------------
+bool read_altrepparam(std::istream &is);
+bool read_attach(std::istream &is);
+bool read_attendee(std::istream &);
+bool read_calscale(std::istream &);
+bool read_control(std::istream &);
+bool read_description(std::istream &);
+bool read_dquote(std::istream &is);
+bool read_dur_value(std::istream &is);
+bool read_duration(std::istream &is);
+bool read_fmttypeparam(std::istream &is);
+bool read_iana_param(std::istream &);
+bool read_iana_prop(std::istream &);
+bool read_iana_token(std::istream &);
+bool read_icalparameter(std::istream &);
+bool read_languageparam(std::istream &is);
+bool read_method(std::istream &);
+bool read_non_us_ascii(std::istream &);
+bool read_other_param(std::istream &);
+bool read_param_value(std::istream &);
+bool read_paramtext(std::istream &);
+bool read_prodid(std::istream &);
+bool read_quoted_string(std::istream &);
+bool read_qvalue_char(std::istream &);
+bool read_rangeparam(std::istream &is);
+bool read_safe_char(std::istream &);
+bool read_summary(std::istream &);
+bool read_text(std::istream &);
+bool read_trigrelparam(std::istream &is);
+bool read_tzidparam(std::istream &is);
+bool read_value_char(std::istream &);
+bool read_vendorid(std::istream &);
+bool read_version(std::istream &);
+bool read_x_name(std::istream &);
+bool read_x_param(std::istream &);
+bool read_x_prop(std::istream &);
+void expect_calparam(std::istream &);
+void expect_calprops(std::istream &is);
+void expect_calscale(std::istream &);
+void expect_calvalue(std::istream &);
+void expect_component(std::istream &is);
+void expect_contentline(std::istream &is);
+void expect_iana_prop(std::istream &);
+void expect_iana_token(std::istream &);
+void expect_icalbody(std::istream &);
+void expect_icalparameter(std::istream &);
+void expect_method(std::istream &);
+void expect_metparam(std::istream &);
+void expect_metvalue(std::istream &);
+void expect_name(std::istream &);
+void expect_other_param(std::istream &);
+void expect_param(std::istream &);
+void expect_param_name(std::istream &);
+void expect_param_value(std::istream &);
+void expect_pidparam(std::istream &);
+void expect_pidvalue(std::istream &);
+void expect_prodid(std::istream &);
+void expect_text(std::istream &);
+void expect_value(std::istream &);
+void expect_verparam(std::istream &);
+void expect_version(std::istream &);
+void expect_vervalue(std::istream &);
+void expect_x_name(std::istream &);
+void expect_x_prop(std::istream &);
 
 
 // -- Exceptions. --------------------------------------------------------------
@@ -103,8 +173,11 @@ public:
 
 class not_implemented : public std::runtime_error {
 public:
-        not_implemented(std::string const &what) :
-                std::runtime_error("Not implemented: " + what) {}
+        not_implemented(std::istream &is, std::string const &what) :
+                std::runtime_error("Not implemented: " + what), pos(is.tellg())
+                {}
+
+        std::istream::pos_type pos = 0;
 };
 
 class syntax_error : public std::runtime_error {
@@ -224,6 +297,7 @@ bool read_token(std::istream &is, string const &tok) {
 }
 
 void expect_newline(std::istream &is) {
+        CALLSTACK;
         // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
         if (!read_token(is, "\r\n") &&
             !read_token(is, "\n") &&
@@ -234,6 +308,7 @@ void expect_newline(std::istream &is) {
 }
 
 bool read_newline(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_newline(is);
                 return true;
@@ -243,6 +318,7 @@ bool read_newline(std::istream &is) {
 }
 
 bool read_hex(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto i = is.get();
         switch(i) {
@@ -279,6 +355,7 @@ bool read_hex(std::istream &is) {
 }
 
 void expect_alpha(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto i = is.get();
         switch(i) {
@@ -343,6 +420,7 @@ void expect_alpha(std::istream &is) {
 }
 
 bool read_alpha(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_alpha(is);
                 return true;
@@ -353,6 +431,7 @@ bool read_alpha(std::istream &is) {
 
 
 void expect_digit(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto i = is.get();
         if (i<'0' || i>'9')
@@ -361,6 +440,7 @@ void expect_digit(std::istream &is) {
 }
 
 bool read_digit(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_digit(is);
                 return true;
@@ -370,6 +450,7 @@ bool read_digit(std::istream &is) {
 }
 
 void expect_alnum(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_alpha(is) || read_digit(is);
         if (!success) {
@@ -379,6 +460,7 @@ void expect_alnum(std::istream &is) {
 }
 
 bool read_alnum(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_alnum(is);
                 return true;
@@ -393,6 +475,7 @@ bool read_alnum(std::istream &is) {
 inline namespace rfc3986 {
 //      gen-delims  = ":" / "/" / "?" / "#" / "[" / "]" / "@"
 bool read_gen_delims(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto i = is.get();
         switch (i) {
@@ -415,6 +498,7 @@ bool read_gen_delims(std::istream &is) {
 //      sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
 //                  / "*" / "+" / "," / ";" / "="
 bool read_sub_delims(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto i = is.get();
         switch (i) {
@@ -440,6 +524,7 @@ bool read_sub_delims(std::istream &is) {
 
 //      reserved    = gen-delims / sub-delims
 bool read_reserved(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_gen_delims(is) ||
@@ -452,6 +537,7 @@ bool read_reserved(std::istream &is) {
 
 //      unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
 bool read_unreserved(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_alpha(is) ||
@@ -468,6 +554,7 @@ bool read_unreserved(std::istream &is) {
 
 // pct-encoded = "%" HEXDIG HEXDIG
 bool read_pct_encoded(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "%") ||
@@ -481,6 +568,7 @@ bool read_pct_encoded(std::istream &is) {
 
 //      pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
 bool read_pchar(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_unreserved(is) ||
@@ -496,6 +584,7 @@ bool read_pchar(std::istream &is) {
 
 //      segment       = *pchar
 bool read_segment(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_pchar(is)) {
         }
@@ -505,6 +594,7 @@ bool read_segment(std::istream &is) {
 
 //      segment-nz    = 1*pchar
 bool read_segment_nz(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         if (!read_pchar(is))
                 return false;
@@ -517,6 +607,7 @@ bool read_segment_nz(std::istream &is) {
 //      segment-nz-nc = 1*( unreserved / pct-encoded / sub-delims / "@" )
 //                    ; non-zero-length segment without any colon ":"
 bool read_segment_nz_nc_single(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_unreserved(is) ||
@@ -530,6 +621,7 @@ bool read_segment_nz_nc_single(std::istream &is) {
 }
 
 bool read_segment_nz_nc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         if (!read_segment_nz_nc_single(is))
                 return false;
@@ -541,6 +633,7 @@ bool read_segment_nz_nc(std::istream &is) {
 
 //      path-abempty  = *( "/" segment )
 bool read_path_abempty(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, "/")) {
                 if (!read_segment(is))
@@ -552,6 +645,7 @@ bool read_path_abempty(std::istream &is) {
 
 //      path-absolute = "/" [ segment-nz *( "/" segment ) ]
 bool read_path_absolute(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         if (!read_token(is, "/"))
                 return false;
@@ -567,6 +661,7 @@ bool read_path_absolute(std::istream &is) {
 
 //      path-noscheme = segment-nz-nc *( "/" segment )
 bool read_path_noscheme(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         if (!read_segment_nz_nc(is))
                 return false;
@@ -580,6 +675,7 @@ bool read_path_noscheme(std::istream &is) {
 
 //      path-rootless = segment-nz *( "/" segment )
 bool read_path_rootless(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         if (!read_segment_nz(is))
                 return false;
@@ -593,6 +689,7 @@ bool read_path_rootless(std::istream &is) {
 
 //      path-empty    = 0<pchar>
 bool read_path_empty(std::istream &is) {
+        CALLSTACK;
         return true;
 }
 
@@ -602,6 +699,7 @@ bool read_path_empty(std::istream &is) {
 //                    / path-rootless   ; begins with a segment
 //                    / path-empty      ; zero characters
 bool read_path(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_path_abempty(is) ||
@@ -617,6 +715,7 @@ bool read_path(std::istream &is) {
 
 //      port        = *DIGIT
 bool read_port(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -628,6 +727,7 @@ bool read_port(std::istream &is) {
 
 //      reg-name    = *( unreserved / pct-encoded / sub-delims )
 bool read_reg_name(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -639,6 +739,7 @@ bool read_reg_name(std::istream &is) {
 
 //      IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 bool read_IPv4address(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -654,6 +755,7 @@ bool read_IPv4address(std::istream &is) {
 //                  / "2" %x30-34 DIGIT     ; 200-249
 //                  / "25" %x30-35          ; 250-255
 bool read_dec_octet(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -673,6 +775,7 @@ bool read_dec_octet(std::istream &is) {
 //                  / [ *5( h16 ":" ) h16 ] "::"              h16
 //                  / [ *6( h16 ":" ) h16 ] "::"
 bool read_IPv6address(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -686,6 +789,7 @@ bool read_IPv6address(std::istream &is) {
 //      ls32        = ( h16 ":" h16 ) / IPv4address
 //                  ; least-significant 32 bits of address
 bool read_ls32(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -699,6 +803,7 @@ bool read_ls32(std::istream &is) {
 //      h16         = 1*4HEXDIG
 //                  ; 16 bits of address represented in hexadecimal
 bool read_h16(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -710,6 +815,7 @@ bool read_h16(std::istream &is) {
 
 //      IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
 bool read_IP_literal(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -721,6 +827,7 @@ bool read_IP_literal(std::istream &is) {
 
 //      IPvFuture  = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
 bool read_IPvFuture(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -732,6 +839,7 @@ bool read_IPvFuture(std::istream &is) {
 
 //      host        = IP-literal / IPv4address / reg-name
 bool read_host(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -743,6 +851,7 @@ bool read_host(std::istream &is) {
 
 //      userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
 bool read_userinfo(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -754,6 +863,7 @@ bool read_userinfo(std::istream &is) {
 
 //      authority   = [ userinfo "@" ] host [ ":" port ]
 bool read_authority(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -768,6 +878,7 @@ bool read_authority(std::istream &is) {
 //                    / path-noscheme
 //                    / path-empty
 bool read_relative_part(std::istream &is) {
+        CALLSTACK;
         {
                 save_input_pos ptran(is);
                 const auto success =
@@ -808,6 +919,7 @@ bool read_relative_part(std::istream &is) {
 
 //      URI-reference = URI / relative-ref
 bool read_URI_reference(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -819,6 +931,7 @@ bool read_URI_reference(std::istream &is) {
 
 //      fragment    = *( pchar / "/" / "?" )
 bool read_fragment(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -830,6 +943,7 @@ bool read_fragment(std::istream &is) {
 
 //      query       = *( pchar / "/" / "?" )
 bool read_query(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -844,6 +958,7 @@ bool read_query(std::istream &is) {
 //                  / path-rootless
 //                  / path-empty
 bool read_hier_part(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -855,6 +970,7 @@ bool read_hier_part(std::istream &is) {
 
 //      URI         = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
 bool read_URI(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -866,6 +982,7 @@ bool read_URI(std::istream &is) {
 
 //      absolute-URI  = scheme ":" hier-part [ "?" query ]
 bool read_absolute_URI(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -877,6 +994,7 @@ bool read_absolute_URI(std::istream &is) {
 
 //      relative-ref  = relative-part [ "?" query ] [ "#" fragment ]
 bool read_relative_ref(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success = false;
@@ -890,19 +1008,19 @@ bool read_relative_ref(std::istream &is) {
 // -- Media Type (RFC 4288) Parser Helpers. ------------------------------------
 inline namespace rfc4288 {
 //       type-name = reg-name
-bool read_type_name(std::istream &) {
+bool read_type_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       subtype-name = reg-name
-bool read_subtype_name(std::istream &) {
+bool read_subtype_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       reg-name = 1*127reg-name-chars
-bool read_reg_name(std::istream &) {
+bool read_reg_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -910,7 +1028,7 @@ bool read_reg_name(std::istream &) {
 //       reg-name-chars = ALPHA / DIGIT / "!" /
 //                       "#" / "$" / "&" / "." /
 //                       "+" / "-" / "^" / "_"
-bool read_reg_name_char(std::istream &) {
+bool read_reg_name_char(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -990,7 +1108,7 @@ inline namespace rfc5646 {
 //  Language-Tag  = langtag             ; normal language tags
 //               / privateuse          ; private use tag
 //               / grandfathered       ; grandfathered tags
-bool read_language_tag(std::istream &) {
+bool read_language_tag(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -999,22 +1117,26 @@ bool read_language_tag(std::istream &) {
 // -- ABNF (RFC 5234) Parser Helpers. ------------------------------------------
 inline namespace rfc5234 {
 bool read_htab(std::istream &is) {
+        CALLSTACK;
         // HTAB = %x09
         return read_token(is, "\t");
 }
 
 bool read_sp(std::istream &is) {
+        CALLSTACK;
         // SP = %x20
         return read_token(is, " ");
 }
 
 bool read_wsp(std::istream &is) {
+        CALLSTACK;
         // WSP = SP / HTAB ; white space
         return read_sp(is) || read_htab(is);
 }
 
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
 void expect_key_value(std::istream &is, string const &k, string const &v) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, k) &&
@@ -1071,82 +1193,9 @@ bool read_key_value(std::istream &is, string const &k, string const &v) {
 //     ; the folding procedure described above.
 }
 
-void expect_icalbody(std::istream &);
-
-void expect_text(std::istream &);
-bool read_text(std::istream &);
-
-void expect_calprops(std::istream &is);
-bool read_prodid(std::istream &);
-void expect_prodid(std::istream &);
-void expect_pidparam(std::istream &);
-void expect_other_param(std::istream &);
-
-void expect_pidvalue(std::istream &);
-
-bool read_version(std::istream &);
-void expect_version(std::istream &);
-void expect_vervalue(std::istream &);
-void expect_verparam(std::istream &);
-
-bool read_calscale(std::istream &);
-void expect_calscale(std::istream &);
-void expect_calparam(std::istream &);
-void expect_calvalue(std::istream &);
-
-bool read_method(std::istream &);
-void expect_method(std::istream &);
-void expect_metparam(std::istream &);
-void expect_metvalue(std::istream &);
-
-bool read_iana_prop(std::istream &);
-void expect_iana_prop(std::istream &);
-
-void expect_component(std::istream &is);
-void expect_contentline(std::istream &is);
-void expect_name(std::istream &);
-
-bool read_iana_token(std::istream &);
-void expect_iana_token(std::istream &);
-
-bool read_vendorid(std::istream &);
-void expect_param(std::istream &);
-void expect_param_name(std::istream &);
-void expect_param_value(std::istream &);
-bool read_param_value(std::istream &);
-bool read_paramtext(std::istream &);
-bool read_quoted_string(std::istream &);
-bool read_safe_char(std::istream &);
-bool read_value_char(std::istream &);
-bool read_qvalue_char(std::istream &);
-bool read_non_us_ascii(std::istream &);
-bool read_control(std::istream &);
-bool read_dquote(std::istream &is);
-
-void expect_value(std::istream &);
-
-bool read_x_prop(std::istream &);
-void expect_x_prop(std::istream &);
-bool read_x_name(std::istream &);
-void expect_x_name(std::istream &);
-
-bool read_icalparameter(std::istream &);
-void expect_icalparameter(std::istream &);
-
-bool read_iana_param(std::istream &);
-bool read_x_param(std::istream &);
-
-bool read_altrepparam(std::istream &is);
-bool read_languageparam(std::istream &is);
-
-bool read_tzidparam(std::istream &is);
-
-bool read_rangeparam(std::istream &is);
-
-bool read_fmttypeparam(std::istream &is);
-
 //    contentline   = name *(";" param ) ":" value CRLF
 void expect_contentline(std::istream &is) {
+        CALLSTACK;
         save_input_pos ts(is);
         expect_name(is);
         while (read_token(is, ";")) {
@@ -1158,6 +1207,7 @@ void expect_contentline(std::istream &is) {
         ts.commit();
 }
 bool read_contentline(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_contentline(is);
                 return true;
@@ -1168,6 +1218,7 @@ bool read_contentline(std::istream &is) {
 
 //     name          = iana-token / x-name
 void expect_name(std::istream &is) {
+        CALLSTACK;
         const auto success =
                 read_iana_token(is) ||
                 read_x_name(is);
@@ -1179,9 +1230,11 @@ void expect_name(std::istream &is) {
 //     iana-token    = 1*(ALPHA / DIGIT / "-")
 //     ; iCalendar identifier registered with IANA
 bool read_iana_token_char(std::istream &is) {
+        CALLSTACK;
         return read_alnum(is) || read_token(is, "-");
 }
 bool read_iana_token(std::istream &is) {
+        CALLSTACK;
         if (!read_iana_token_char(is))
                 return false;
         while (read_iana_token_char(is))
@@ -1190,6 +1243,7 @@ bool read_iana_token(std::istream &is) {
         return true;
 }
 void expect_iana_token(std::istream &is) {
+        CALLSTACK;
         if (!read_iana_token(is))
                 throw unexpected_token(is);
 }
@@ -1197,6 +1251,7 @@ void expect_iana_token(std::istream &is) {
 //     vendorid      = 3*(ALPHA / DIGIT)
 //     ; Vendor identification
 void expect_vendorid(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
 
         expect_alnum(is);
@@ -1209,6 +1264,7 @@ void expect_vendorid(std::istream &is) {
         ptran.commit();
 }
 bool read_vendorid(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_vendorid(is);
                 return true;
@@ -1217,63 +1273,125 @@ bool read_vendorid(std::istream &is) {
         }
 }
 
-//     param         = param-name "=" param-value *("," param-value)
-//     ; Each property defines the specific ABNF for the parameters
-//     ; allowed on the property.  Refer to specific properties for
-//     ; precise parameter ABNF.
-//
-void expect_param(std::istream &is) {
-        save_input_pos ptran(is);
-        expect_param_name(is);
-        expect_token(is, "=");
-        expect_param_value(is);
-        while (read_token(is, ","))
-                expect_param_value(is);
-        ptran.commit();
-}
-
-//     param-name    = iana-token / x-name
-void expect_param_name(std::istream &is) {
-        const auto success =
-                read_iana_token(is) ||
-                read_x_name(is);
-        if (!success) {
-                throw syntax_error(is, "expected param-name");
-        }
-}
-
-
-//     param-value   = paramtext / quoted-string
-bool read_param_value(std::istream &is) {
-        return read_paramtext(is) || read_quoted_string(is);
-}
-void expect_param_value(std::istream &is) {
-        if (!read_param_value(is))
-                throw syntax_error(is);
-}
-
-//     paramtext     = *SAFE-CHAR
-bool read_paramtext(std::istream &is) {
-        while (read_safe_char(is))
-                ;
-        return true;
-}
-
-//     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
-bool read_quoted_string(std::istream &is) {
-        NOT_IMPLEMENTED;
-}
-
-//     SAFE-CHAR     = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-7E
-//                   / NON-US-ASCII
+//     SAFE-CHAR     = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-7E / NON-US-ASCII
 //     ; Any character except CONTROL, DQUOTE, ";", ":", ","
-bool read_safe_char(std::istream &) {
-        NOT_IMPLEMENTED;
+bool read_safe_char(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        // WSP
+        if (read_wsp(is)) {
+                ptran.commit();
+                return true;
+        }
+        const auto i = is.get();
+        switch(i) {
+        // %x21
+        case '!':
+        // %x23-2B
+        case '#':
+        case '$':
+        case '%':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case '+':
+        // %x2D-39
+        case '-':
+        case '.':
+        case '/':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        // %x3C-7E
+        case '<':
+        case '=':
+        case '>':
+        case '?':
+        case '@':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+        case '[':
+        case '\\':
+        case ']':
+        case '^':
+        case '_':
+        case '`':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+        case '{':
+        case '|':
+        case '}':
+        case '~':
+                ptran.commit();
+                return true;
+        }
+
+        // NON-US-ASCII
+        //std::cerr << "todo: non-us-ascii" << std::endl;
+        return false;
 }
 
 //     VALUE-CHAR    = WSP / %x21-7E / NON-US-ASCII
 //     ; Any textual character
 bool read_value_char(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         // WSP
         if (read_wsp(is)) {
@@ -1388,26 +1506,96 @@ bool read_value_char(std::istream &is) {
 
 //     QSAFE-CHAR    = WSP / %x21 / %x23-7E / NON-US-ASCII
 //     ; Any character except CONTROL and DQUOTE
-bool read_qsafe_char(std::istream &) {
+bool read_qsafe_char(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
 //     ; UTF8-2, UTF8-3, and UTF8-4 are defined in [RFC3629]
-bool read_non_us_ascii(std::istream &) {
+bool read_non_us_ascii(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     CONTROL       = %x00-08 / %x0A-1F / %x7F
 //     ; All the controls except HTAB
-bool read_control(std::istream &) {
+bool read_control(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     value         = *VALUE-CHAR
 void expect_value(std::istream &is) {
+        CALLSTACK;
         while (read_value_char(is)) {
         }
+}
+
+
+//     param         = param-name "=" param-value *("," param-value)
+//     ; Each property defines the specific ABNF for the parameters
+//     ; allowed on the property.  Refer to specific properties for
+//     ; precise parameter ABNF.
+//
+void expect_param(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        expect_param_name(is);
+        expect_token(is, "=");
+        expect_param_value(is);
+        while (read_token(is, ","))
+                expect_param_value(is);
+        ptran.commit();
+}
+
+//     param-name    = iana-token / x-name
+void expect_param_name(std::istream &is) {
+        CALLSTACK;
+        const auto success =
+                read_iana_token(is) ||
+                read_x_name(is);
+        if (!success) {
+                throw syntax_error(is, "expected param-name");
+        }
+}
+
+
+//     param-value   = paramtext / quoted-string
+bool read_param_value(std::istream &is) {
+        CALLSTACK;
+        return read_paramtext(is) || read_quoted_string(is);
+}
+void expect_param_value(std::istream &is) {
+        CALLSTACK;
+        if (!read_param_value(is))
+                throw syntax_error(is);
+}
+
+//     paramtext     = *SAFE-CHAR
+bool read_paramtext(std::istream &is) {
+        CALLSTACK;
+        while (read_safe_char(is))
+                ;
+        return true;
+}
+
+//     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
+bool read_quoted_string(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+
+        if (!read_dquote(is))
+                return false;
+
+        while (read_qsafe_char(is)) {
+        }
+
+        if (!read_dquote(is))
+                return false;
+
+        ptran.commit();
+        return true;
 }
 
 
@@ -1432,6 +1620,7 @@ void expect_ical(std::istream &is) {
 }
 
 bool read_ical(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_ical(is);
                 return true;
@@ -1444,9 +1633,7 @@ bool read_ical(std::istream &is) {
 void expect_icalbody(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        std::cerr << "expect_calprops()...\n";
         expect_calprops(is);
-        std::cerr << "expect_component()...\n";
         expect_component(is);
         ptran.commit();
 }
@@ -1470,6 +1657,7 @@ void expect_icalbody(std::istream &is) {
 //                  ;
 //                  )
 bool read_calprop(std::istream &is) {
+        CALLSTACK;
         const auto success =
                 read_prodid(is) ||
                 read_version(is) ||
@@ -1490,6 +1678,7 @@ void expect_calprops(std::istream &is) {
 
 //       prodid     = "PRODID" pidparam ":" pidvalue CRLF
 void expect_prodid(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_token(is, "PRODID");
         expect_pidparam(is);
@@ -1497,9 +1686,9 @@ void expect_prodid(std::istream &is) {
         expect_pidvalue(is);
         expect_newline(is);
         ptran.commit();
-        std::cerr << " <-- PRODID" << std::endl;
 }
 bool read_prodid(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_prodid(is);
                 return true;
@@ -1510,6 +1699,7 @@ bool read_prodid(std::istream &is) {
 
 //       version    = "VERSION" verparam ":" vervalue CRLF
 void expect_version(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_token(is, "VERSION");
         expect_verparam(is);
@@ -1517,10 +1707,9 @@ void expect_version(std::istream &is) {
         expect_vervalue(is);
         expect_newline(is);
         ptran.commit();
-
-        std::cerr << " <-- VERSION" << std::endl;
 }
 bool read_version(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_version(is);
                 return true;
@@ -1531,6 +1720,7 @@ bool read_version(std::istream &is) {
 
 //       verparam   = *(";" other-param)
 void expect_verparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while(read_token(is, ";"))
                 expect_other_param(is);
@@ -1547,11 +1737,13 @@ void expect_verparam(std::istream &is) {
 //       maxver     = <A IANA-registered iCalendar version identifier>
 //       ;Maximum iCalendar version needed to parse the iCalendar object.
 void expect_vervalue(std::istream &is) {
+        CALLSTACK;
         expect_text(is);
 }
 
 //       calscale   = "CALSCALE" calparam ":" calvalue CRLF
 void expect_calscale(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_token(is, "CALSCALE");
         expect_calparam(is);
@@ -1559,9 +1751,9 @@ void expect_calscale(std::istream &is) {
         expect_calvalue(is);
         expect_newline(is);
         ptran.commit();
-        std::cerr << " <-- CALSCALE" << std::endl;
 }
 bool read_calscale(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_calscale(is);
                 return true;
@@ -1572,6 +1764,7 @@ bool read_calscale(std::istream &is) {
 
 //       calparam   = *(";" other-param)
 void expect_calparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";"))
                 expect_other_param(is);
@@ -1580,11 +1773,13 @@ void expect_calparam(std::istream &is) {
 
 //       calvalue   = "GREGORIAN"
 void expect_calvalue(std::istream &is) {
-        read_text(is);
+        CALLSTACK;
+        expect_token(is, "GREGORIAN");
 }
 
 //       method     = "METHOD" metparam ":" metvalue CRLF
 bool read_method(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_method(is);
                 return true;
@@ -1593,6 +1788,7 @@ bool read_method(std::istream &is) {
         }
 }
 void expect_method(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_token(is, "METHOD");
         expect_metparam(is);
@@ -1600,11 +1796,11 @@ void expect_method(std::istream &is) {
         expect_metvalue(is);
         expect_newline(is);
         ptran.commit();
-        std::cerr << " <-- METHOD" << std::endl;
 }
 
 //       metparam   = *(";" other-param)
 void expect_metparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";"))
                 expect_other_param(is);
@@ -1613,11 +1809,13 @@ void expect_metparam(std::istream &is) {
 
 //       metvalue   = iana-token
 void expect_metvalue(std::istream &is) {
+        CALLSTACK;
         expect_iana_token(is);
 }
 
 //       x-prop = x-name *(";" icalparameter) ":" value CRLF
 void expect_x_prop(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_x_name(is);
         while (read_token(is, ";"))
@@ -1626,9 +1824,9 @@ void expect_x_prop(std::istream &is) {
         expect_value(is);
         expect_newline(is);
         ptran.commit();
-        std::cerr << " <-- X-PROP" << std::endl;
 }
 bool read_x_prop(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_x_prop(is);
                 return true;
@@ -1641,6 +1839,7 @@ bool read_x_prop(std::istream &is) {
 //     x-name        = "X-" [vendorid "-"] 1*(ALPHA / DIGIT / "-")
 //     ; Reserved for experimental use.
 void expect_x_name(std::istream &is) {
+        CALLSTACK;
         save_input_pos ts(is);
 
         // "X-"
@@ -1661,6 +1860,7 @@ void expect_x_name(std::istream &is) {
         ts.commit();
 }
 bool read_x_name(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_x_name(is);
                 return true;
@@ -1671,6 +1871,7 @@ bool read_x_name(std::istream &is) {
 
 //       iana-prop = iana-token *(";" icalparameter) ":" value CRLF
 void expect_iana_prop(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         expect_iana_token(is);
         while (read_token(is, ";"))
@@ -1679,9 +1880,9 @@ void expect_iana_prop(std::istream &is) {
         expect_value(is);
         expect_newline(is);
         ptran.commit();
-        std::cerr << " <-- IANA-PROP" << std::endl;
 }
 bool read_iana_prop(std::istream &is) {
+        CALLSTACK;
         return false; // TODO
         try {
                 expect_iana_prop(is);
@@ -1693,6 +1894,7 @@ bool read_iana_prop(std::istream &is) {
 
 //       pidparam   = *(";" other-param)
 void expect_pidparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";"))
                 expect_other_param(is);
@@ -1705,6 +1907,7 @@ void expect_pidparam(std::istream &is) {
 //     x-param     = x-name "=" param-value *("," param-value)
 //     ; A non-standard, experimental parameter.
 void expect_other_param(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -1712,6 +1915,7 @@ void expect_other_param(std::istream &is) {
 //       ;Any text that describes the product and version
 //       ;and that is generally assured of being unique.
 void expect_pidvalue(std::istream &is) {
+        CALLSTACK;
         expect_text(is);
 }
 
@@ -1720,6 +1924,7 @@ void expect_pidvalue(std::istream &is) {
 //          ; \\ encodes \, \N or \n encodes newline
 //          ; \; encodes ;, \, encodes ,
 bool read_escaped_char(std::istream &is) {
+        CALLSTACK;
         return read_token(is, "\\\\")
             || read_token(is, "\\;")
             || read_token(is, "\\,")
@@ -1732,6 +1937,7 @@ bool read_escaped_char(std::istream &is) {
 //          ; Any character except CONTROLs not needed by the current
 //          ; character set, DQUOTE, ";", ":", "\", ","
 bool read_tsafe_char(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         // WSP
         if (read_wsp(is)) {
@@ -1852,18 +2058,21 @@ bool read_tsafe_char(std::istream &is) {
 //          ; Folded according to description above
 //
 bool read_text_char(std::istream &is) {
+        CALLSTACK;
         return read_tsafe_char(is)
             || read_token(is, ":")
             || read_dquote(is)
             || read_escaped_char(is);
 }
 void expect_text(std::istream &is) {
+        CALLSTACK;
         while(read_text_char(is)) {
         }
 }
 
 // DQUOTE: ASCII 22
 bool read_dquote(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto c = is.get();
         if (c != 22)
@@ -1873,12 +2082,235 @@ bool read_dquote(std::istream &is) {
 }
 
 bool read_text(std::istream &is) {
+        CALLSTACK;
         try {
                 expect_text(is);
                 return true;
         } catch (syntax_error &) {
                 return false;
         }
+}
+
+bool read_binary(std::istream &is) {
+        CALLSTACK;
+        NOT_IMPLEMENTED;
+}
+
+//       float      = (["+"] / "-") 1*DIGIT ["." 1*DIGIT]
+bool read_float(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+
+        // (["+"] / "-")
+        if (!read_token(is, "+"))
+                read_token(is, "-");
+
+        // 1*DIGIT
+        if (!read_digit(is))
+                return false;
+        while (read_digit(is)) {
+        }
+
+        // ["." 1*DIGIT]
+        if (read_token(is, ".")) {
+                if (!read_digit(is))
+                        return false;
+                while (read_digit(is)) {
+                }
+        }
+
+        ptran.commit();
+        return true;
+}
+//       integer    = (["+"] / "-") 1*DIGIT
+bool read_integer(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+
+        // (["+"] / "-")
+        if (!read_token(is, "+"))
+                read_token(is, "-");
+
+        // 1*DIGIT
+        if (!read_digit(is))
+                return false;
+        while (read_digit(is)) {
+        }
+
+        ptran.commit();
+        return true;
+}
+//       actionvalue = "AUDIO" / "DISPLAY" / "EMAIL" / iana-token / x-name
+bool read_actionvalue(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "AUDIO") ||
+                read_token(is, "DISPLAY") ||
+                read_token(is, "EMAIL") ||
+                read_iana_token(is) ||
+                read_x_name(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       actionparam = *(";" other-param)
+bool read_actionparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                if (!read_other_param(is))
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       action      = "ACTION" actionparam ":" actionvalue CRLF
+bool read_action(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ACTION") &&
+                read_actionparam(is) &&
+                read_token(is, ":") &&
+                read_actionvalue(is) &&
+                read_newline(is) ;
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       trigabs    = *(
+//                  ;
+//                  ; The following is REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" "VALUE" "=" "DATE-TIME") /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  ) ":" date-time
+bool read_trigabs(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "ACTION") &&
+                read_actionparam(is) &&
+                read_token(is, ":") &&
+                read_actionvalue(is) &&
+                read_newline(is) ;
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       trigrel    = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" "VALUE" "=" "DURATION") /
+//                  (";" trigrelparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  ) ":"  dur-value
+bool read_trigrel_single(std::istream &is) {
+        CALLSTACK;
+        // (";" "VALUE" "=" "DURATION")
+        {
+                save_input_pos ptran(is);
+                const auto success =
+                        read_token(is, ";") &&
+                        read_token(is, "VALUE") &&
+                        read_token(is, "=") &&
+                        read_token(is, "DURATION");
+                if (success) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        // (";" trigrelparam)
+        {
+                save_input_pos ptran(is);
+                const auto success =
+                        read_token(is, ";") &&
+                        read_trigrelparam(is);
+                if (success) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        // (";" other-param)
+        {
+                save_input_pos ptran(is);
+                const auto success =
+                        read_token(is, ";") &&
+                        read_other_param(is);
+                if (success) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        return false;
+}
+bool read_trigrel(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_trigrel_single(is)) {
+        }
+        // ":"  dur-value
+        const auto match = read_token(is, ":") && read_dur_value(is);
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       trigger    = "TRIGGER" (trigrel / trigabs) CRLF
+bool read_trigger(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "TRIGGER") &&
+                (read_trigrel(is) || read_trigabs(is)) &&
+                read_newline(is) ;
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       repparam   = *(";" other-param)
+bool read_repparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                if (!read_other_param(is))
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       repeat  = "REPEAT" repparam ":" integer CRLF  ;Default is "0", zero.
+bool read_repeat(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "REPEAT") &&
+                read_repparam(is) &&
+                read_token(is, ":") &&
+                read_integer(is) &&
+                read_newline(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
 }
 
 //       audioprop  = *(
@@ -1905,15 +2337,118 @@ bool read_text(std::istream &is) {
 //                  x-prop / iana-prop
 //                  ;
 //                  )
+bool read_audioprop_single(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_action(is) || read_trigger(is) ||
+                read_duration(is) || read_repeat(is) ||
+                read_attach(is) ||
+                read_x_prop(is) || read_iana_prop(is);
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       dispprop   = *(
+//                  ;
+//                  ; The following are REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  action / description / trigger /
+//                  ;
+//                  ; 'duration' and 'repeat' are both OPTIONAL,
+//                  ; and MUST NOT occur more than once each;
+//                  ; but if one occurs, so MUST the other.
+//                  ;
+//                  duration / repeat /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  x-prop / iana-prop
+//                  ;
+//                  )
+bool read_dispprop_single(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_action(is) || read_description(is) || read_trigger(is) ||
+                read_duration(is) || read_repeat(is) ||
+                read_attach(is) ||
+                read_x_prop(is) || read_iana_prop(is);
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       emailprop  = *(
+//                  ;
+//                  ; The following are all REQUIRED,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  action / description / trigger / summary /
+//                  ;
+//                  ; The following is REQUIRED,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attendee /
+//                  ;
+//                  ; 'duration' and 'repeat' are both OPTIONAL,
+//                  ; and MUST NOT occur more than once each;
+//                  ; but if one occurs, so MUST the other.
+//                  ;
+//                  duration / repeat /
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  attach / x-prop / iana-prop
+//                  ;
+//                  )
+bool read_emailprop_single(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_action(is) || read_description(is) || read_trigger(is) ||
+                read_summary(is) ||
+                read_attendee(is) ||
+                read_duration(is) || read_repeat(is) ||
+                read_attach(is) || read_x_prop(is) || read_iana_prop(is);
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+bool read_alarmc_prop(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_audioprop_single(is) ||
+               read_dispprop_single(is) ||
+               read_emailprop_single(is)) {
+        }
+        ptran.commit();
+        return true;
+}
 //       alarmc     = "BEGIN" ":" "VALARM" CRLF
 //                    (audioprop / dispprop / emailprop)
 //                    "END" ":" "VALARM" CRLF
 bool read_alarmc(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_key_value(is, "BEGIN", "VALARM") &&
+                read_alarmc_prop(is) &&
+                read_key_value(is, "END", "VALARM");
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
 }
 
 //       date-fullyear      = 4DIGIT
 bool read_date_fullyear(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_digit(is) &&
@@ -1927,6 +2462,7 @@ bool read_date_fullyear(std::istream &is) {
 }
 //       date-month         = 2DIGIT        ;01-12
 bool read_date_month(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_digit(is) &&
@@ -1939,6 +2475,7 @@ bool read_date_month(std::istream &is) {
 //       date-mday          = 2DIGIT        ;01-28, 01-29, 01-30, 01-31
 //                                          ;based on month/year
 bool read_date_mday(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_digit(is) &&
@@ -1951,6 +2488,7 @@ bool read_date_mday(std::istream &is) {
 
 //       date-value         = date-fullyear date-month date-mday
 bool read_date_value(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_date_fullyear(is) &&
@@ -1964,6 +2502,7 @@ bool read_date_value(std::istream &is) {
 
 //       date               = date-value
 bool read_date(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_date_value(is);
@@ -1975,6 +2514,7 @@ bool read_date(std::istream &is) {
 
 //       time-hour    = 2DIGIT        ;00-23
 bool read_time_hour(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_digit(is) && read_digit(is);
         if (!success)
@@ -1984,6 +2524,7 @@ bool read_time_hour(std::istream &is) {
 }
 //       time-minute  = 2DIGIT        ;00-59
 bool read_time_minute(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_digit(is) && read_digit(is);
         if (!success)
@@ -1994,6 +2535,7 @@ bool read_time_minute(std::istream &is) {
 //       time-second  = 2DIGIT        ;00-60
 //       ;The "60" value is used to account for positive "leap" seconds.
 bool read_time_second(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_digit(is) && read_digit(is);
         if (!success)
@@ -2003,6 +2545,7 @@ bool read_time_second(std::istream &is) {
 }
 //       time-utc     = "Z"
 bool read_time_utc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_token(is, "Z");
         if (!success)
@@ -2013,6 +2556,7 @@ bool read_time_utc(std::istream &is) {
 
 //       time         = time-hour time-minute time-second [time-utc]
 bool read_time(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_time_hour(is) &&
@@ -2028,6 +2572,7 @@ bool read_time(std::istream &is) {
 //       date-time  = date "T" time ;As specified in the DATE and TIME
 //                                  ;value definitions
 bool read_date_time(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_date(is) &&
@@ -2041,6 +2586,7 @@ bool read_date_time(std::istream &is) {
 
 //       dur-week   = 1*DIGIT "W"
 bool read_dur_week(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2052,6 +2598,7 @@ bool read_dur_week(std::istream &is) {
 }
 //       dur-hour   = 1*DIGIT "H" [dur-minute]
 bool read_dur_hour(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2063,6 +2610,7 @@ bool read_dur_hour(std::istream &is) {
 }
 //       dur-minute = 1*DIGIT "M" [dur-second]
 bool read_dur_minute(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2074,6 +2622,7 @@ bool read_dur_minute(std::istream &is) {
 }
 //       dur-second = 1*DIGIT "S"
 bool read_dur_second(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2085,6 +2634,7 @@ bool read_dur_second(std::istream &is) {
 }
 //       dur-day    = 1*DIGIT "D"
 bool read_dur_day(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2097,6 +2647,7 @@ bool read_dur_day(std::istream &is) {
 
 //       dur-date   = dur-day [dur-time]
 bool read_dur_date(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2108,6 +2659,7 @@ bool read_dur_date(std::istream &is) {
 }
 //       dur-time   = "T" (dur-hour / dur-minute / dur-second)
 bool read_dur_time(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2120,6 +2672,7 @@ bool read_dur_time(std::istream &is) {
 
 //       dur-value  = (["+"] / "-") "P" (dur-date / dur-time / dur-week)
 bool read_dur_value(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2130,13 +2683,62 @@ bool read_dur_value(std::istream &is) {
         return true;
 }
 
+//       period-start = date-time "/" dur-value
+//       ; [ISO.8601.2004] complete representation basic format for a
+//       ; period of time consisting of a start and positive duration
+//       ; of time.
+bool read_period_start(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_date_time(is) &&
+                read_token(is, "/") &&
+                read_dur_value(is) ;
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       period-explicit = date-time "/" date-time
+bool read_period_explicit(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_date_time(is) &&
+                read_token(is, "/") &&
+                read_date_time(is) ;
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+
+//       ; [ISO.8601.2004] complete representation basic format for a
+//       ; period of time consisting of a start and end.  The start MUST
+//       ; be before the end.
+//       period     = period-explicit / period-start
+bool read_period(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_period_explicit(is) ||
+                read_period_start(is) ;
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+
 //     other-param   = (iana-param / x-param)
 bool read_other_param(std::istream &is) {
+        CALLSTACK;
         return read_iana_param(is) || read_x_param(is);
 }
 
 // stmparam   = *(";" other-param)
 bool read_stmparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";")) {
                 if (!read_other_param(is))
@@ -2148,6 +2750,7 @@ bool read_stmparam(std::istream &is) {
 
 // dtstamp    = "DTSTAMP" stmparam ":" date-time CRLF
 bool read_dtstamp(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DTSTAMP") &&
@@ -2162,6 +2765,7 @@ bool read_dtstamp(std::istream &is) {
 }
 //       uidparam   = *(";" other-param)
 bool read_uidparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";")) {
                 if (!read_other_param(is))
@@ -2172,6 +2776,7 @@ bool read_uidparam(std::istream &is) {
 }
 //       uid        = "UID" uidparam ":" text CRLF
 bool read_uid(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "UID") &&
@@ -2186,6 +2791,7 @@ bool read_uid(std::istream &is) {
 }
 //       dtstval    = date-time / date
 bool read_dtstval(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_date_time(is) || read_date(is);
         if (!success)
@@ -2209,6 +2815,7 @@ bool read_dtstval(std::istream &is) {
 //                  ;
 //                  )
 bool read_dtstparam_single(std::istream &is) {
+        CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
         {
                 save_input_pos ptran(is);
@@ -2247,6 +2854,7 @@ bool read_dtstparam_single(std::istream &is) {
         return false;
 }
 bool read_dtstparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_dtstparam_single(is)) {
         }
@@ -2256,6 +2864,7 @@ bool read_dtstparam(std::istream &is) {
 //       dtstart    = "DTSTART" dtstparam ":" dtstval CRLF
 //
 bool read_dtstart(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DTSTART") &&
@@ -2273,6 +2882,7 @@ bool read_dtstart(std::istream &is) {
 //                  / x-name
 //       ;Default is PUBLIC
 bool read_classvalue(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2281,6 +2891,7 @@ bool read_classvalue(std::istream &is) {
 
 //       classparam = *(";" other-param)
 bool read_classparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2289,6 +2900,7 @@ bool read_classparam(std::istream &is) {
 
 //       class      = "CLASS" classparam ":" classvalue CRLF
 bool read_class(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "CLASS") &&
@@ -2303,6 +2915,7 @@ bool read_class(std::istream &is) {
 }
 //       creaparam  = *(";" other-param)
 bool read_creaparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2310,6 +2923,7 @@ bool read_creaparam(std::istream &is) {
 }
 //       created    = "CREATED" creaparam ":" date-time CRLF
 bool read_created(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "CREATED") &&
@@ -2336,6 +2950,7 @@ bool read_created(std::istream &is) {
 //                   ;
 //                   )
 bool read_descparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2343,6 +2958,7 @@ bool read_descparam(std::istream &is) {
 }
 //       description = "DESCRIPTION" descparam ":" text CRLF
 bool read_description(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DESCRIPTION") &&
@@ -2358,20 +2974,31 @@ bool read_description(std::istream &is) {
 //       geovalue   = float ";" float
 //       ;Latitude and Longitude components
 bool read_geovalue(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        const auto match =
+                read_float(is) &&
+                read_token(is, ";") &&
+                read_float(is);
+        if (!match)
+                return false;
         ptran.commit();
         return true;
 }
 //       geoparam   = *(";" other-param)
 bool read_geoparam(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                if (!read_other_param(is))
+                        return false;
+        }
         ptran.commit();
         return true;
 }
 //       geo        = "GEO" geoparam ":" geovalue CRLF
 bool read_geo(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "GEO") &&
@@ -2386,6 +3013,7 @@ bool read_geo(std::istream &is) {
 }
 //       lstparam   = *(";" other-param)
 bool read_lstparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2393,6 +3021,7 @@ bool read_lstparam(std::istream &is) {
 }
 //       last-mod   = "LAST-MODIFIED" lstparam ":" date-time CRLF
 bool read_last_mod(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "LAST-MODIFIED") &&
@@ -2420,6 +3049,7 @@ bool read_last_mod(std::istream &is) {
 //                  ;
 //                  )
 bool read_locparam_single(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, ";") && (
@@ -2433,6 +3063,7 @@ bool read_locparam_single(std::istream &is) {
         return true;
 }
 bool read_locparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_locparam_single(is)) {
         }
@@ -2441,6 +3072,7 @@ bool read_locparam(std::istream &is) {
 }
 //       location   = "LOCATION"  locparam ":" text CRLF
 bool read_location(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "LOCATION") &&
@@ -2468,12 +3100,14 @@ bool read_location(std::istream &is) {
 //                  ;
 //                  )
 bool read_orgparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
         return true;
 }
 bool read_cal_address(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2481,6 +3115,7 @@ bool read_cal_address(std::istream &is) {
 }
 //       organizer  = "ORGANIZER" orgparam ":" cal-address CRLF
 bool read_organizer(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "ORGANIZER") &&
@@ -2497,6 +3132,7 @@ bool read_organizer(std::istream &is) {
 //       priovalue   = integer       ;Must be in the range [0..9]
 //          ; All other values are reserved for future use.
 bool read_priovalue(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2504,6 +3140,7 @@ bool read_priovalue(std::istream &is) {
 }
 //       prioparam  = *(";" other-param)
 bool read_prioparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2512,6 +3149,7 @@ bool read_prioparam(std::istream &is) {
 //       priority   = "PRIORITY" prioparam ":" priovalue CRLF
 //       ;Default is zero (i.e., undefined).
 bool read_priority(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "PRIORITY") &&
@@ -2526,6 +3164,7 @@ bool read_priority(std::istream &is) {
 }
 //       seqparam   = *(";" other-param)
 bool read_seqparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";")) {
                 if (!read_other_param(is))
@@ -2534,14 +3173,9 @@ bool read_seqparam(std::istream &is) {
         ptran.commit();
         return true;
 }
-bool read_integer(std::istream &is) {
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        ptran.commit();
-        return true;
-}
 //       seq = "SEQUENCE" seqparam ":" integer CRLF     ; Default is "0"
 bool read_seq(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "SEQUENCE") &&
@@ -2559,6 +3193,7 @@ bool read_seq(std::istream &is) {
 //                       / "CANCELLED"    ;Indicates journal is removed.
 //      ;Status values for "VJOURNAL".
 bool read_statvalue_jour(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2571,6 +3206,7 @@ bool read_statvalue_jour(std::istream &is) {
 //                       / "CANCELLED"    ;Indicates to-do was cancelled.
 //       ;Status values for "VTODO".
 bool read_statvalue_todo(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2582,6 +3218,7 @@ bool read_statvalue_todo(std::istream &is) {
 //                       /  statvalue-todo
 //                       /  statvalue-jour)
 bool read_statvalue(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2593,6 +3230,7 @@ bool read_statvalue(std::istream &is) {
 //                       / "CANCELLED"    ;Indicates event was cancelled.
 //       ;Status values for a "VEVENT"
 bool read_statvalue_event(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2601,6 +3239,7 @@ bool read_statvalue_event(std::istream &is) {
 
 //       statparam       = *(";" other-param)
 bool read_statparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2609,6 +3248,7 @@ bool read_statparam(std::istream &is) {
 
 //       status          = "STATUS" statparam ":" statvalue CRLF
 bool read_status(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "STATUS") &&
@@ -2635,6 +3275,7 @@ bool read_status(std::istream &is) {
 //                  ;
 //                  )
 bool read_summparam_single(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, ";") && (
@@ -2648,6 +3289,7 @@ bool read_summparam_single(std::istream &is) {
         return true;
 }
 bool read_summparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_summparam_single(is)) {
         }
@@ -2657,6 +3299,7 @@ bool read_summparam(std::istream &is) {
 
 //       summary    = "SUMMARY" summparam ":" text CRLF
 bool read_summary(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "SUMMARY") &&
@@ -2672,6 +3315,7 @@ bool read_summary(std::istream &is) {
 
 //       transparam = *(";" other-param)
 bool read_transparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_token(is, ";")) {
                 if (!read_other_param(is))
@@ -2687,6 +3331,7 @@ bool read_transparam(std::istream &is) {
 //                   ;Transparent on busy time searches.
 //       ;Default value is OPAQUE
 bool read_transvalue(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "OPAQUE") ||
@@ -2699,6 +3344,7 @@ bool read_transvalue(std::istream &is) {
 
 //       transp     = "TRANSP" transparam ":" transvalue CRLF
 bool read_transp(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "TRANSP") &&
@@ -2713,6 +3359,7 @@ bool read_transp(std::istream &is) {
 }
 //      uri = <As defined in Section 3 of [RFC3986]>
 bool read_uri(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = rfc3986::read_URI(is);
         if (!success)
@@ -2722,6 +3369,7 @@ bool read_uri(std::istream &is) {
 }
 //       urlparam   = *(";" other-param)
 bool read_urlparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -2729,6 +3377,7 @@ bool read_urlparam(std::istream &is) {
 }
 //       url        = "URL" urlparam ":" uri CRLF
 bool read_url(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "URL") &&
@@ -2744,6 +3393,7 @@ bool read_url(std::istream &is) {
 //       ridval     = date-time / date
 //       ;Value MUST match value type
 bool read_ridval(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_date_time(is) || read_date(is);
         if (!success)
@@ -2768,6 +3418,7 @@ bool read_ridval(std::istream &is) {
 //                  ;
 //                  )
 bool read_ridparam_single(std::istream &is) {
+        CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
         {
                 save_input_pos ptran(is);
@@ -2806,6 +3457,7 @@ bool read_ridparam_single(std::istream &is) {
         return false;
 }
 bool read_ridparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         while (read_ridparam_single(is)) {
         }
@@ -2815,6 +3467,7 @@ bool read_ridparam(std::istream &is) {
 
 //       setposday   = yeardaynum
 bool read_setposday(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2827,6 +3480,7 @@ bool read_setposday(std::istream &is) {
 
 //       bysplist    = ( setposday *("," setposday) )
 bool read_bysplist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2839,6 +3493,7 @@ bool read_bysplist(std::istream &is) {
 
 //       monthnum    = 1*2DIGIT       ;1 to 12
 bool read_monthnum(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2851,6 +3506,7 @@ bool read_monthnum(std::istream &is) {
 
 //       bymolist    = ( monthnum *("," monthnum) )
 bool read_bymolist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2863,6 +3519,7 @@ bool read_bymolist(std::istream &is) {
 
 //       weeknum     = [plus / minus] ordwk
 bool read_weeknum(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2875,6 +3532,7 @@ bool read_weeknum(std::istream &is) {
 
 //       bywknolist  = ( weeknum *("," weeknum) )
 bool read_bywknolist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2887,6 +3545,7 @@ bool read_bywknolist(std::istream &is) {
 
 //       ordyrday    = 1*3DIGIT      ;1 to 366
 bool read_ordyrday(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2899,6 +3558,7 @@ bool read_ordyrday(std::istream &is) {
 
 //       yeardaynum  = [plus / minus] ordyrday
 bool read_yeardaynum(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2911,6 +3571,7 @@ bool read_yeardaynum(std::istream &is) {
 
 //       byyrdaylist = ( yeardaynum *("," yeardaynum) )
 bool read_byyrdaylist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2923,6 +3584,7 @@ bool read_byyrdaylist(std::istream &is) {
 
 //       ordmoday    = 1*2DIGIT       ;1 to 31
 bool read_ordmoday(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2935,6 +3597,7 @@ bool read_ordmoday(std::istream &is) {
 
 //       monthdaynum = [plus / minus] ordmoday
 bool read_monthdaynum(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2947,6 +3610,7 @@ bool read_monthdaynum(std::istream &is) {
 
 //       bymodaylist = ( monthdaynum *("," monthdaynum) )
 bool read_bymodaylist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2961,6 +3625,7 @@ bool read_bymodaylist(std::istream &is) {
 //       ;Corresponding to SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY,
 //       ;FRIDAY, and SATURDAY days of the week.
 bool read_weekday(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2973,6 +3638,7 @@ bool read_weekday(std::istream &is) {
 
 //       ordwk       = 1*2DIGIT       ;1 to 53
 bool read_ordwk(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2985,6 +3651,7 @@ bool read_ordwk(std::istream &is) {
 
 //       minus       = "-"
 bool readminus(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -2997,6 +3664,7 @@ bool readminus(std::istream &is) {
 
 //       plus        = "+"
 bool read_plus(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3009,6 +3677,7 @@ bool read_plus(std::istream &is) {
 
 //       weekdaynum  = [[plus / minus] ordwk] weekday
 bool read_weekdaynum(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3021,6 +3690,7 @@ bool read_weekdaynum(std::istream &is) {
 
 //       bywdaylist  = ( weekdaynum *("," weekdaynum) )
 bool read_bywdaylist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3033,6 +3703,7 @@ bool read_bywdaylist(std::istream &is) {
 
 //       hour        = 1*2DIGIT       ;0 to 23
 bool read_hour(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3045,6 +3716,7 @@ bool read_hour(std::istream &is) {
 
 //       byhrlist    = ( hour *("," hour) )
 bool read_byhrlist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3057,6 +3729,7 @@ bool read_byhrlist(std::istream &is) {
 
 //       minutes     = 1*2DIGIT       ;0 to 59
 bool read_minutes(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3069,6 +3742,7 @@ bool read_minutes(std::istream &is) {
 
 //       byminlist   = ( minutes *("," minutes) )
 bool read_byminlist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3081,6 +3755,7 @@ bool read_byminlist(std::istream &is) {
 
 //       seconds     = 1*2DIGIT       ;0 to 60
 bool read_seconds(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3093,6 +3768,7 @@ bool read_seconds(std::istream &is) {
 
 //       byseclist   = ( seconds *("," seconds) )
 bool read_byseclist(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3105,6 +3781,7 @@ bool read_byseclist(std::istream &is) {
 
 //       enddate     = date / date-time
 bool read_enddate(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3118,6 +3795,7 @@ bool read_enddate(std::istream &is) {
 //       freq        = "SECONDLY" / "MINUTELY" / "HOURLY" / "DAILY"
 //                   / "WEEKLY" / "MONTHLY" / "YEARLY"
 bool read_freq(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3143,6 +3821,7 @@ bool read_freq(std::istream &is) {
 //                       / ( "BYSETPOS" "=" bysplist )
 //                       / ( "WKST" "=" weekday )
 bool read_recur_rule_part(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3167,6 +3846,7 @@ bool read_recur_rule_part(std::istream &is) {
 //                       ; The other rule parts are OPTIONAL,
 //                       ; but MUST NOT occur more than once.
 bool read_recur(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3179,6 +3859,7 @@ bool read_recur(std::istream &is) {
 
 //       recurid    = "RECURRENCE-ID" ridparam ":" ridval CRLF
 bool read_recurid(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "RECURRENCE-ID") &&
@@ -3193,6 +3874,7 @@ bool read_recurid(std::istream &is) {
 }
 //       rrulparam  = *(";" other-param)
 bool read_rrulparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -3200,6 +3882,7 @@ bool read_rrulparam(std::istream &is) {
 }
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
 bool read_rrule(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "RRULE") &&
@@ -3215,6 +3898,7 @@ bool read_rrule(std::istream &is) {
 //       dtendval   = date-time / date
 //       ;Value MUST match value type
 bool read_dtendval(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success = read_date_time(is) ||read_date(is);
         if (!success)
@@ -3237,6 +3921,7 @@ bool read_dtendval(std::istream &is) {
 //                  ;
 //           )
 bool read_dtendparam(std::istream &is) {
+        CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
         {
                 save_input_pos ptran(is);
@@ -3276,6 +3961,7 @@ bool read_dtendparam(std::istream &is) {
 }
 //       dtend      = "DTEND" dtendparam ":" dtendval CRLF
 bool read_dtend(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DTEND") &&
@@ -3290,6 +3976,7 @@ bool read_dtend(std::istream &is) {
 }
 //       durparam   = *(";" other-param)
 bool read_durparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         const auto success =
@@ -3302,6 +3989,7 @@ bool read_durparam(std::istream &is) {
 //       duration   = "DURATION" durparam ":" dur-value CRLF
 //                    ;consisting of a positive duration of time.
 bool read_duration(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DURATION") &&
@@ -3330,6 +4018,7 @@ bool read_duration(std::istream &is) {
 //                   ;
 //                   )
 bool read_attachparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, ";") &&
@@ -3346,43 +4035,279 @@ bool read_attachparam(std::istream &is) {
 //                    /
 //                    (
 //                      ";" "ENCODING" "=" "BASE64"
-//                      ";" "VALUE" "=" "BINARY"
-//                      ":" binary
+//                        ";" "VALUE" "=" "BINARY"
+//                        ":" binary
 //                    )
 //                    CRLF
 bool read_attach(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+
+        const auto match_head =
+                read_token(is, "ATTACH") && read_attachparam(is);
+        if (!match_head)
+                return false;
+
+        // ":" uri
+        {
+                save_input_pos ptran_uri(is);
+                const auto match_uri =
+                        read_token(is, ":") &&
+                        read_uri(is) &&
+                        read_newline(is) ;
+                if (match_uri) {
+                        ptran_uri.commit();
+                        ptran.commit();
+                        return true;
+                }
+        }
+
+        // ";" "ENCODING" "=" "BASE64" ";" "VALUE" "=" "BINARY" ":" binary
+        {
+                save_input_pos ptran_enc(is);
+                const auto match_enc =
+                        read_token(is, ";") &&
+                        read_token(is, "ENCODING") &&
+                        read_token(is, "=") &&
+                        read_token(is, "BASE64") &&
+                        read_token(is, ";") &&
+                        read_token(is, "VALUE") &&
+                        read_token(is, "=") &&
+                        read_token(is, "BINARY") &&
+                        read_token(is, ":") &&
+                        read_binary(is) &&
+                        read_newline(is) ;
+                if (match_enc) {
+                        ptran_enc.commit();
+                        ptran.commit();
+                        return true;
+                }
+        }
+
+        return false;
+}
+//       attparam   = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" cutypeparam) / (";" memberparam) /
+//                  (";" roleparam) / (";" partstatparam) /
+//                  (";" rsvpparam) / (";" deltoparam) /
+//                  (";" delfromparam) / (";" sentbyparam) /
+//                  (";" cnparam) / (";" dirparam) /
+//                  (";" languageparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_attparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
         return true;
 }
+//       attendee   = "ATTENDEE" attparam ":" cal-address CRLF
 bool read_attendee(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "ATTENDEE") &&
+                read_attparam(is) &&
+                read_token(is, ":") &&
+                read_cal_address(is) &&
+                read_newline(is);
+        if (!match)
+                return false;
         ptran.commit();
         return true;
 }
+//       catparam   = *(
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" languageparam ) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_catparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                const auto match =
+                        read_languageparam(is) ||
+                        read_other_param(is);
+                if (!match)
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       categories = "CATEGORIES" catparam ":" text *("," text)
+//                    CRLF
 bool read_categories (std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "CATEGORIES") &&
+                read_catparam(is) &&
+                read_token(is, ":") &&
+                read_text(is);
+        if (!match)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_text(is))
+                        return false;
+        }
+        if (!read_newline(is))
+                return false;
+
         ptran.commit();
         return true;
 }
+//       commparam  = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" altrepparam) /
+//                  (";" languageparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_commparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                const auto match =
+                        read_altrepparam(is) ||
+                        read_languageparam(is) ||
+                        read_other_param(is);
+                if (!match)
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       comment    = "COMMENT" commparam ":" text CRLF
 bool read_comment(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "COMMENT") &&
+                read_commparam(is) &&
+                read_token(is, ":") &&
+                read_text(is) &&
+                read_newline(is);
+        if (!match)
+                return false;
         ptran.commit();
         return true;
 }
+//       contparam  = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" altrepparam)/
+//                  (";" languageparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_contparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                const auto match =
+                        read_altrepparam(is) ||
+                        read_languageparam(is) ||
+                        read_other_param(is);
+                if (!match)
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       contact    = "CONTACT" contparam ":" text CRLF
 bool read_contact(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "CONTACT") &&
+                read_contparam(is) &&
+                read_token(is, ":") &&
+                read_text(is) &&
+                read_newline(is);
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       exdtval    = date-time / date
+//       ;Value MUST match value type
+bool read_exdtval(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
         return true;
 }
-bool read_exdate(std::istream &is) {
+//       exdtparam  = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" "VALUE" "=" ("DATE-TIME" / "DATE")) /
+//                  ;
+//                  (";" tzidparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_exdtparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        ptran.commit();
+        return true;
+}
+//       exdate     = "EXDATE" exdtparam ":" exdtval *("," exdtval) CRLF
+bool read_exdate(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "EXDATE") &&
+                read_exdtparam(is) &&
+                read_token(is, ":") &&
+                read_exdtval(is);
+        if (!match)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_exdtval(is))
+                        return false;
+        }
+        if (!read_newline(is))
+                return false;
         ptran.commit();
         return true;
 }
@@ -3391,8 +4316,10 @@ bool read_exdate(std::istream &is) {
 //       ;Textual exception data.  For example, the offending property
 //       ;name and value or complete property line.
 bool read_extdata(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        if (!read_text(is))
+                return false;
         ptran.commit();
         return true;
 }
@@ -3400,8 +4327,10 @@ bool read_extdata(std::istream &is) {
 //       statdesc   = text
 //       ;Textual status description
 bool read_statdesc(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        if (!read_text(is))
+                return false;
         ptran.commit();
         return true;
 }
@@ -3409,6 +4338,7 @@ bool read_statdesc(std::istream &is) {
 //       statcode   = 1*DIGIT 1*2("." 1*DIGIT)
 //       ;Hierarchical, numeric return status code
 bool read_statcode(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
@@ -3429,8 +4359,15 @@ bool read_statcode(std::istream &is) {
 //                  ;
 //                  )
 bool read_rstatparam(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                const auto match =
+                        read_languageparam(is) ||
+                        read_other_param(is);
+                if (!match)
+                        return false;
+        }
         ptran.commit();
         return true;
 }
@@ -3438,6 +4375,7 @@ bool read_rstatparam(std::istream &is) {
 //       rstatus    = "REQUEST-STATUS" rstatparam ":"
 //                    statcode ";" statdesc [";" extdata]
 bool read_rstatus(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "REQUEST-STATUS") &&
@@ -3452,21 +4390,201 @@ bool read_rstatus(std::istream &is) {
         ptran.commit();
         return true;
 }
+//       reltypeparam       = "RELTYPE" "="
+//                           ("PARENT"    ; Parent relationship - Default
+//                          / "CHILD"     ; Child relationship
+//                          / "SIBLING"   ; Sibling relationship
+//                          / iana-token  ; Some other IANA-registered
+//                                        ; iCalendar relationship type
+//                          / x-name)     ; A non-standard, experimental
+//                                        ; relationship type
+bool read_reltypeparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto match =
+                read_token(is, "RELTYPE") &&
+                read_token(is, "=") &&
+                (
+                        read_token(is, "PARENT") ||
+                        read_token(is, "CHILD") ||
+                        read_token(is, "SIBLING") ||
+                        read_iana_token(is) ||
+                        read_x_name(is)
+                );
+        if (!match)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       relparam   = *(
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" reltypeparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_relparam(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        while (read_token(is, ";")) {
+                const auto match =
+                        read_reltypeparam(is) ||
+                        read_other_param(is);
+                if (!match)
+                        return false;
+        }
+        ptran.commit();
+        return true;
+}
+//       related    = "RELATED-TO" relparam ":" text CRLF
 bool read_related(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RELATED-TO") &&
+                read_relparam(is) &&
+                read_token(is, ":") &&
+                read_text(is) &&
+                read_newline(is);
+        if (!success)
+                return false;
+        ptran.commit();
+        return true;
+}
+//       resrcparam = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" altrepparam) / (";" languageparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_resrcparam(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
         ptran.commit();
         return true;
 }
+//       resources  = "RESOURCES" resrcparam ":" text *("," text) CRLF
 bool read_resources(std::istream &is) {
-        NOT_IMPLEMENTED;
+        CALLSTACK;
         save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RESOURCES") &&
+                read_resrcparam(is) &&
+                read_token(is, ":") &&
+                read_text(is);
+        if (!success)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_text(is))
+                        return false;
+        }
+        if (!read_newline(is))
+                return false;
         ptran.commit();
         return true;
 }
-bool read_rdate(std::istream &is) {
-        NOT_IMPLEMENTED;
+//       rdtval     = date-time / date / period
+//       ;Value MUST match value type
+bool read_rdtval(std::istream &is) {
+        CALLSTACK;
+        return read_date_time(is) || read_date(is) || read_period(is);
+}
+//       rdtparam   = *(
+//                  ;
+//                  ; The following are OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" "VALUE" "=" ("DATE-TIME" / "DATE" / "PERIOD")) /
+//                  (";" tzidparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+bool read_rdtparam_single(std::istream &is) {
+        CALLSTACK;
+        // (";" "VALUE" "=" ("DATE-TIME" / "DATE" / "PERIOD"))
+        {
+                save_input_pos ptran(is);
+                const auto match =
+                        read_token(is, ";") &&
+                        read_token(is, "VALUE") &&
+                        read_token(is, "=") &&
+                        (
+                                read_date_time(is) ||
+                                read_date(is) ||
+                                read_period(is)
+                        );
+                if (match) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        // (";" tzidparam)
+        {
+                save_input_pos ptran(is);
+                const auto match =
+                        read_token(is, ";") &&
+                        read_tzidparam(is);
+                if (match) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        // (";" other-param)
+        {
+                save_input_pos ptran(is);
+                const auto match =
+                        read_token(is, ";") &&
+                        read_other_param(is);
+                if (match) {
+                        ptran.commit();
+                        return true;
+                }
+        }
+        return false;
+}
+bool read_rdtparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
+        while (read_rdtparam_single(is)) {
+        }
+        ptran.commit();
+        return true;
+}
+//       rdate      = "RDATE" rdtparam ":" rdtval *("," rdtval) CRLF
+bool read_rdate(std::istream &is) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto success =
+                read_token(is, "RDATE") &&
+                read_rdtparam(is) &&
+                read_token(is, ":") &&
+                read_rdtval(is);
+        if (!success)
+                return false;
+        while (read_token(is, ",")) {
+                if (!read_rdtval(is))
+                        return false;
+        }
+        if (!read_newline(is))
+                return false;
         ptran.commit();
         return true;
 }
@@ -3542,7 +4660,7 @@ bool read_eventprop_single(std::istream &is) {
                 read_class(is) || read_created(is) || read_description(is) ||
                 read_geo(is) || read_last_mod(is) || read_location(is) ||
                 read_organizer(is) || read_priority(is) || read_seq(is) ||
-                        read_rstatus(is) || read_summary(is) || read_transp(is) ||
+                read_rstatus(is) || read_summary(is) || read_transp(is) ||
                 read_url(is) || read_recurid(is) ||
 
                 read_rrule(is) ||
@@ -3576,15 +4694,12 @@ bool read_eventprop(std::istream &is) {
 bool read_eventc(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        std::cerr << " read_eventc\n";
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VEVENT") &&
                 read_eventprop(is);
         if (!success_pro) {
-                std::cerr << " read_eventc: success_pro=false\n";
                 return false;
         }
-        std::cerr << " read_eventc: success_pro=true\n";
 
         while(read_alarmc(is)) {
         }
@@ -3637,6 +4752,7 @@ bool read_eventc(std::istream &is) {
 //                  ;
 //                  )
 bool read_todoprop(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3644,6 +4760,7 @@ bool read_todoprop(std::istream &is) {
 //                    todoprop *alarmc
 //                    "END" ":" "VTODO" CRLF
 bool read_todoc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VTODO") &&
@@ -3661,7 +4778,6 @@ bool read_todoc(std::istream &is) {
 
         ptran.commit();
 
-        std::cerr << " <-- TODO" << std::endl;
         return true;
 }
 
@@ -3701,6 +4817,7 @@ bool read_jourprop(std::istream &is) {
 //                    jourprop
 //                    "END" ":" "VJOURNAL" CRLF
 bool read_journalc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_key_value(is, "BEGIN", "VJOURNAL") &&
@@ -3733,6 +4850,7 @@ bool read_journalc(std::istream &is) {
 //                  ;
 //                  )
 bool read_fbprop(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3740,6 +4858,7 @@ bool read_fbprop(std::istream &is) {
 //                    fbprop
 //                    "END" ":" "VFREEBUSY" CRLF
 bool read_freebusyc(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_key_value(is, "BEGIN", "VFREEBUSY") &&
@@ -3752,10 +4871,12 @@ bool read_freebusyc(std::istream &is) {
 }
 
 bool read_tzid(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 bool read_tzurl(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3778,6 +4899,7 @@ bool read_tzurl(std::istream &is) {
 //                    ;
 //                    )
 bool read_tzprop(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3785,6 +4907,7 @@ bool read_tzprop(std::istream &is) {
 //                    tzprop
 //                    "END" ":" "DAYLIGHT" CRLF
 bool read_daylightc(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3792,6 +4915,7 @@ bool read_daylightc(std::istream &is) {
 //                    tzprop
 //                    "END" ":" "STANDARD" CRLF
 bool read_standardc(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -3821,6 +4945,7 @@ bool read_standardc(std::istream &is) {
 //                    )
 //                    "END" ":" "VTIMEZONE" CRLF
 bool read_timezonec(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VTIMEZONE") &&
@@ -3850,6 +4975,7 @@ bool read_timezonec(std::istream &is) {
 //                    1*contentline
 //                    "END" ":" iana-token CRLF
 bool read_iana_comp(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_token(is, "BEGIN") &&
@@ -3880,6 +5006,7 @@ bool read_iana_comp(std::istream &is) {
 //                    1*contentline
 //                    "END" ":" x-name CRLF
 bool read_x_comp(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_token(is, "BEGIN") &&
@@ -3932,16 +5059,14 @@ void expect_component_single(std::istream &is) {
 void expect_component(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        std::cerr << " expect_component: 1st\n";
         expect_component_single(is);
-        std::cerr << " got 1st component\n";
         while(read_component_single(is)) {
-                std::cerr << " expect_component: n'th\n";
         }
         ptran.commit();
 }
 
 bool read_dquoted_value(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
 
         if (!read_dquote(is))
@@ -3959,6 +5084,7 @@ bool read_dquoted_value(std::istream &is) {
 
 // altrepparam = "ALTREP" "=" DQUOTE uri DQUOTE
 bool read_altrepparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "ALTREP") &&
@@ -3972,6 +5098,7 @@ bool read_altrepparam(std::istream &is) {
 
 // cnparam    = "CN" "=" param-value
 bool read_cnparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "ALTREP") &&
@@ -3994,6 +5121,7 @@ bool read_cnparam(std::istream &is) {
 //                                          ; type
 //       ; Default is INDIVIDUAL
 bool read_cutypeparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "CUTYPE") &&
@@ -4017,6 +5145,7 @@ bool read_cutypeparam(std::istream &is) {
 //      delfromparam       = "DELEGATED-FROM" "=" DQUOTE cal-address DQUOTE
 //                           *("," DQUOTE cal-address DQUOTE)
 bool read_delfromparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DELEGATED-FROM") &&
@@ -4035,6 +5164,7 @@ bool read_delfromparam(std::istream &is) {
 //      deltoparam = "DELEGATED-TO" "=" DQUOTE cal-address DQUOTE
 //                    *("," DQUOTE cal-address DQUOTE)
 bool read_deltoparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DELEGATED-TO") &&
@@ -4052,6 +5182,7 @@ bool read_deltoparam(std::istream &is) {
 
 //      dirparam   = "DIR" "=" DQUOTE uri DQUOTE
 bool read_dirparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "DIR") &&
@@ -4069,6 +5200,7 @@ bool read_dirparam(std::istream &is) {
 //          / "BASE64" ; "BASE64" binary encoding format is defined in [RFC4648]
 //          )
 bool read_encodingparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "ENCODING") &&
@@ -4087,6 +5219,7 @@ bool read_encodingparam(std::istream &is) {
 //                      ; Where "type-name" and "subtype-name" are
 //                      ; defined in Section 4.2 of [RFC4288].
 bool read_fmttypeparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "FMTTYPE") &&
@@ -4112,6 +5245,7 @@ bool read_fmttypeparam(std::istream &is) {
 //                          )
 //                ; Some other IANA-registered iCalendar free/busy type.
 bool read_fbtypeparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "FBTYPE") &&
@@ -4135,6 +5269,7 @@ bool read_fbtypeparam(std::istream &is) {
 //       language = Language-Tag
 //                  ; As defined in [RFC5646].
 bool read_languageparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "LANGUAGE") &&
@@ -4149,6 +5284,7 @@ bool read_languageparam(std::istream &is) {
 //       memberparam        = "MEMBER" "=" DQUOTE cal-address DQUOTE
 //                            *("," DQUOTE cal-address DQUOTE)
 bool read_memberparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "LANGUAGE") &&
@@ -4174,6 +5310,7 @@ bool read_memberparam(std::istream &is) {
 //       ; These are the participation statuses for a "VJOURNAL".
 //       ; Default is NEEDS-ACTION.
 bool read_partstat_jour(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -4195,6 +5332,7 @@ bool read_partstat_jour(std::istream &is) {
 //       ; These are the participation statuses for a "VTODO".
 //       ; Default is NEEDS-ACTION.
 bool read_partstat_todo(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -4210,6 +5348,7 @@ bool read_partstat_todo(std::istream &is) {
 //       ; These are the participation statuses for a "VEVENT".
 //       ; Default is NEEDS-ACTION.
 bool read_partstat_event(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -4218,6 +5357,7 @@ bool read_partstat_event(std::istream &is) {
 //                        / partstat-todo
 //                        / partstat-jour)
 bool read_partstatparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "PARTSTAT") &&
@@ -4237,6 +5377,7 @@ bool read_partstatparam(std::istream &is) {
 //       ; To specify the instance specified by the recurrence identifier
 //       ; and all subsequent recurrence instances.
 bool read_rangeparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "RANGE") &&
@@ -4252,6 +5393,7 @@ bool read_rangeparam(std::istream &is) {
 //                          ( "START"       ; Trigger off of start
 //                          / "END")        ; Trigger off of end
 bool read_trigrelparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "RELATED") &&
@@ -4265,33 +5407,6 @@ bool read_trigrelparam(std::istream &is) {
         ptran.commit();
         return true;
 }
-
-//       reltypeparam       = "RELTYPE" "="
-//                           ("PARENT"    ; Parent relationship - Default
-//                          / "CHILD"     ; Child relationship
-//                          / "SIBLING"   ; Sibling relationship
-//                          / iana-token  ; Some other IANA-registered
-//                                        ; iCalendar relationship type
-//                          / x-name)     ; A non-standard, experimental
-//                                        ; relationship type
-bool read_reltypeparam(std::istream &is) {
-        save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "RELTYPE") &&
-                read_token(is, "=") &&
-                (
-                        read_token(is, "PARENT") ||
-                        read_token(is, "CHILD") ||
-                        read_token(is, "SIBLING") ||
-                        read_iana_token(is) ||
-                        read_x_name(is)
-                );
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
 //       roleparam  = "ROLE" "="
 //                   ("CHAIR"             ; Indicates chair of the
 //                                        ; calendar entity
@@ -4306,6 +5421,7 @@ bool read_reltypeparam(std::istream &is) {
 //                  / iana-token)         ; Other IANA role
 //       ; Default is REQ-PARTICIPANT
 bool read_roleparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "ROLE") &&
@@ -4327,6 +5443,7 @@ bool read_roleparam(std::istream &is) {
 //       rsvpparam = "RSVP" "=" ("TRUE" / "FALSE")
 //       ; Default is FALSE
 bool read_rsvpparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "RSVP") &&
@@ -4343,6 +5460,7 @@ bool read_rsvpparam(std::istream &is) {
 
 //       sentbyparam        = "SENT-BY" "=" DQUOTE cal-address DQUOTE
 bool read_sentbyparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "SENT-BY") &&
@@ -4356,15 +5474,18 @@ bool read_sentbyparam(std::istream &is) {
 
 //       tzidprefix = "/"
 bool read_tzidprefix(std::istream &is) {
+        CALLSTACK;
         return read_token(is, "/");
 }
 bool read_optional_tzidprefix(std::istream &is) {
+        CALLSTACK;
         read_tzidprefix(is);
         return true;
 }
 
 //       tzidparam  = "TZID" "=" [tzidprefix] paramtext
 bool read_tzidparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "TZID") &&
@@ -4396,6 +5517,7 @@ bool read_tzidparam(std::istream &is) {
 //                  / iana-token)
 //                  ; Some other IANA-registered iCalendar value type.
 bool read_valuetype(std::istream &is) {
+        CALLSTACK;
         return read_token(is, "BINARY") ||
                read_token(is, "BOOLEAN") ||
                read_token(is, "CAL-ADDRESS") ||
@@ -4416,6 +5538,7 @@ bool read_valuetype(std::istream &is) {
 
 //       valuetypeparam = "VALUE" "=" valuetype
 bool read_valuetypeparam(std::istream &is) {
+        CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
                 read_token(is, "VALUE") &&
@@ -4430,12 +5553,14 @@ bool read_valuetypeparam(std::istream &is) {
 //     iana-param  = iana-token "=" param-value *("," param-value)
 //     ; Some other IANA-registered iCalendar parameter.
 bool read_iana_param(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     x-param     = x-name "=" param-value *("," param-value)
 //     ; A non-standard, experimental parameter.
 bool read_x_param(std::istream &is) {
+        CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
@@ -4462,10 +5587,12 @@ bool read_x_param(std::istream &is) {
 //                   / valuetypeparam    ; Property value data type
 //                   / other-param
 void expect_icalparameter(std::istream &is) {
+        CALLSTACK;
         if (!read_icalparameter(is))
                 throw syntax_error(is);
 }
 bool read_icalparameter(std::istream &is) {
+        CALLSTACK;
         return read_altrepparam(is)
             || read_cnparam(is)
             || read_cutypeparam(is)
@@ -4489,6 +5616,22 @@ bool read_icalparameter(std::istream &is) {
             || read_other_param(is);
 }
 
+void print_location(std::istream::pos_type pos, std::istream &is) {
+        CALLSTACK;
+        const auto where = pos;
+        is.seekg(0);
+        int line = 1, col = 1;
+        while(is.tellg() < where) {
+                if(read_newline(is)) {
+                        col = 1;
+                        ++line;
+                } else {
+                        auto g = is.get();
+                        //std::cout << "[" << (char)g << "]";
+                }
+        }
+        std::cerr << " (in line " << line << ":" << col << ")\n";
+}
 #include <fstream>
 int main() {
         CALLSTACK;
@@ -4497,20 +5640,10 @@ int main() {
                 expect_ical(f);
         } catch (syntax_error &e) {
                 std::cerr << "syntax-error:" << e.what();
-
-                const auto where = e.pos;
-                f.seekg(0);
-                int line = 1, col = 1;
-                while(f.tellg() < where) {
-                        if(read_newline(f)) {
-                                col = 1;
-                                ++line;
-                        } else {
-                                auto g = f.get();
-                                //std::cout << "[" << (char)g << "]";
-                        }
-                }
-                std::cerr << " (in line " << line << ":" << col << ")\n";
+                print_location(e.pos, f);
+        } catch (not_implemented &e) {
+                std::cerr << "not-implemented:" << e.what();
+                print_location(e.pos, f);
         } catch (std::exception &e) {
                 std::cerr << "unknown error:" << e.what();
         }
