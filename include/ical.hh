@@ -6,13 +6,15 @@
 #include <string>
 #include <optional>
 #include <iosfwd>
-
+#include <tuple>
 
 using std::string;
 using std::string;
 using std::vector;
 using std::optional;
 using std::nullopt;
+using std::tuple;
+using std::make_tuple;
 
 struct OtherParam {
 };
