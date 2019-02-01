@@ -16,7 +16,7 @@ void print_location(std::istream::pos_type pos, std::istream &is) {
                         //std::cout << "[" << (char)g << "]";
                 }
         }
-        std::cerr << " (in line " << line << ":" << col << ")\n";
+        std::cerr << " (while parsing line " << line << ":" << col << ")\n";
 }
 
 // -- Utils. -------------------------------------------------------------------

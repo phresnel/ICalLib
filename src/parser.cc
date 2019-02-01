@@ -8,7 +8,7 @@
 
 
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
-optional<tuple<string, string>> expect_key_value(
+tuple<string, string> expect_key_value(
         istream &is,
         string const &k,
         string const &v
@@ -23,16 +23,17 @@ optional<tuple<string, string>> expect_key_value(
         if (!success)
                 throw key_value_pair_expected(is.tellg(), k, v);
         ptran.commit();
-        return tuple{k, v};
+        return {k, v};
 }
 
-bool read_key_value(istream &is, string const &k, string const &v) {
+optional<tuple<string, string>> read_key_value(
+        istream &is, string const &k, string const &v
+) {
         CALLSTACK;
         try {
-                expect_key_value(is, k, v);
-                return true;
+                return expect_key_value(is, k, v);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
@@ -71,94 +72,105 @@ bool read_key_value(istream &is, string const &k, string const &v) {
 //     ; the folding procedure described above.
 
 //    contentline   = name *(";" param ) ":" value CRLF
-void expect_contentline(istream &is) {
+ContentLine expect_contentline(istream &is) {
         CALLSTACK;
         save_input_pos ts(is);
-        expect_name(is);
+        ContentLine ret;
+        ret.name = expect_name(is);
         while (read_token(is, ";")) {
-                expect_param(is);
+                ret.params.push_back(expect_param(is));
         }
         expect_token(is, ":");
-        expect_value(is);
+        ret.value = expect_value(is);
         expect_newline(is);
         ts.commit();
+
+        std::cout << "ContentLine read: " << ret << std::endl;
+        return ret;
 }
-bool read_contentline(istream &is) {
+optional<ContentLine> read_contentline(istream &is) {
         CALLSTACK;
         try {
-                expect_contentline(is);
-                return true;
+                return expect_contentline(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //     name          = iana-token / x-name
-void expect_name(istream &is) {
+string expect_name(istream &is) {
         CALLSTACK;
-        const auto success =
-                read_iana_token(is) ||
-                read_x_name(is);
-        if (!success) {
-                throw syntax_error(is.tellg(), "expected iana-token or x-name");
-        }
+        if (auto v = read_iana_token(is))
+                return *v;
+        if (auto v = read_x_name(is))
+                return *v;
+        throw syntax_error(is.tellg(), "expected iana-token or x-name");
 }
 
 //     iana-token    = 1*(ALPHA / DIGIT / "-")
 //     ; iCalendar identifier registered with IANA
-bool read_iana_token_char(istream &is) {
+optional<string> read_iana_token_char(istream &is) {
         CALLSTACK;
-        return read_alnum(is) || read_token(is, "-");
+        if (auto v = read_alnum(is)) return *v;
+        if (auto v = read_token(is, "-")) return *v;
+        return nullopt;
 }
-bool read_iana_token(istream &is) {
+optional<string> read_iana_token(istream &is) {
         CALLSTACK;
-        if (!read_iana_token_char(is))
-                return false;
-        while (read_iana_token_char(is))
-                ;
+        string ret;
+        if (auto c = read_iana_token_char(is)) {
+                ret += *c;
+        } else {
+                return nullopt;
+        }
+        while (auto c = read_iana_token_char(is))
+                ret += *c;
         // TODO: IANA iCalendar identifiers
-        return true;
+        return ret;
 }
-void expect_iana_token(istream &is) {
+string expect_iana_token(istream &is) {
         CALLSTACK;
-        if (!read_iana_token(is))
-                throw unexpected_token(is.tellg());
+        if (auto v = read_iana_token(is))
+                return *v;
+        throw unexpected_token(is.tellg());
 }
 
 //     vendorid      = 3*(ALPHA / DIGIT)
 //     ; Vendor identification
-void expect_vendorid(istream &is) {
+string expect_vendorid(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
 
-        expect_alnum(is);
-        expect_alnum(is);
-        expect_alnum(is);
+        string ret;
+        ret += expect_alnum(is);
+        ret += expect_alnum(is);
+        ret += expect_alnum(is);
 
-        while (read_alnum(is)) {
+        while (auto v = read_alnum(is)) {
+                ret += *v;
         }
 
         ptran.commit();
+        return ret;
 }
-bool read_vendorid(istream &is) {
+optional<string> read_vendorid(istream &is) {
         CALLSTACK;
         try {
-                expect_vendorid(is);
-                return true;
+                return expect_vendorid(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //     SAFE-CHAR     = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-7E / NON-US-ASCII
 //     ; Any character except CONTROL, DQUOTE, ";", ":", ","
-bool read_safe_char(istream &is) {
+optional<string> read_safe_char(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
-        if (read_wsp(is)) {
+        if (auto v = read_wsp(is)) {
                 ptran.commit();
-                return true;
+                return *v;
         }
         const auto i = is.get();
         switch(i) {
@@ -257,23 +269,23 @@ bool read_safe_char(istream &is) {
         case '}':
         case '~':
                 ptran.commit();
-                return true;
+                return string() + char(i);
         }
 
         // NON-US-ASCII
         //std::cerr << "todo: non-us-ascii" << std::endl;
-        return false;
+        return nullopt;
 }
 
 //     VALUE-CHAR    = WSP / %x21-7E / NON-US-ASCII
 //     ; Any textual character
-bool read_value_char(istream &is) {
+optional<string> read_value_char(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
-        if (read_wsp(is)) {
+        if (auto v = read_wsp(is)) {
                 ptran.commit();
-                return true;
+                return v;
         }
         const auto i = is.get();
         switch(i) {
@@ -373,31 +385,31 @@ bool read_value_char(istream &is) {
         case '}':
         case '~':
                 ptran.commit();
-                return true;
+                return string() + char(i);
         }
 
         // NON-US-ASCII
         //std::cerr << "todo: non-us-ascii" << std::endl;
-        return false;
+        return nullopt;
 }
 
 //     QSAFE-CHAR    = WSP / %x21 / %x23-7E / NON-US-ASCII
 //     ; Any character except CONTROL and DQUOTE
-bool read_qsafe_char(istream &is) {
+optional<string> read_qsafe_char(istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
 //     ; UTF8-2, UTF8-3, and UTF8-4 are defined in [RFC3629]
-bool read_non_us_ascii(istream &is) {
+optional<string> read_non_us_ascii(istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     CONTROL       = %x00-08 / %x0A-1F / %x7F
 //     ; All the controls except HTAB
-bool read_control(istream &is) {
+optional<string> read_control(istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -407,7 +419,7 @@ string expect_value(istream &is) {
         CALLSTACK;
         string ret;
         while (auto c = read_value_char(is)) {
-                ret += c;
+                ret += *c;
         }
         return ret;
 }
@@ -418,64 +430,71 @@ string expect_value(istream &is) {
 //     ; allowed on the property.  Refer to specific properties for
 //     ; precise parameter ABNF.
 //
-void expect_param(istream &is) {
+Param expect_param(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        expect_param_name(is);
+        Param ret;
+        ret.name = expect_param_name(is);
         expect_token(is, "=");
-        expect_param_value(is);
+        ret.values.push_back(expect_param_value(is));
         while (read_token(is, ","))
-                expect_param_value(is);
+                ret.values.push_back(expect_param_value(is));
         ptran.commit();
+        return ret;
 }
 
 //     param-name    = iana-token / x-name
-void expect_param_name(istream &is) {
+string expect_param_name(istream &is) {
         CALLSTACK;
-        const auto success =
-                read_iana_token(is) ||
-                read_x_name(is);
-        if (!success) {
-                throw syntax_error(is.tellg(), "expected param-name");
-        }
+        if (auto v = read_iana_token(is))
+                return *v;
+        if (auto v = read_x_name(is))
+                return *v;
+        throw syntax_error(is.tellg(), "expected param-name");
 }
 
 
 //     param-value   = paramtext / quoted-string
-bool read_param_value(istream &is) {
+optional<string> read_param_value(istream &is) {
         CALLSTACK;
-        return read_paramtext(is) || read_quoted_string(is);
+        if (auto v = read_paramtext(is)) return *v;
+        if (auto v = read_quoted_string(is)) return *v;
+        return nullopt;
 }
-void expect_param_value(istream &is) {
+string expect_param_value(istream &is) {
         CALLSTACK;
-        if (!read_param_value(is))
-                throw syntax_error(is.tellg());
+        if (auto v = read_param_value(is))
+                return *v;
+        throw syntax_error(is.tellg());
 }
 
 //     paramtext     = *SAFE-CHAR
-bool read_paramtext(istream &is) {
+optional<string> read_paramtext(istream &is) {
         CALLSTACK;
-        while (read_safe_char(is))
-                ;
-        return true;
+        string ret;
+        while (auto v = read_safe_char(is))
+                ret += *v;
+        return ret;
 }
 
 //     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
-bool read_quoted_string(istream &is) {
+optional<string> read_quoted_string(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
 
         if (!read_dquote(is))
-                return false;
+                return nullopt;
 
-        while (read_qsafe_char(is)) {
+        string ret;
+        while (auto v = read_qsafe_char(is)) {
+                ret += *v;
         }
 
         if (!read_dquote(is))
-                return false;
+                return nullopt;
 
         ptran.commit();
-        return true;
+        return ret;
 }
 
 
@@ -490,32 +509,35 @@ bool read_quoted_string(istream &is) {
 //     icalobject = "BEGIN" ":" "VCALENDAR" CRLF
 //                  icalbody
 //                  "END" ":" "VCALENDAR" CRLF
-void expect_ical(istream &is) {
+Calendar expect_ical(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        Calendar ret;
         expect_key_value(is, "BEGIN", "VCALENDAR");
-        expect_icalbody(is);
+        ret = expect_icalbody(is);
         expect_key_value(is, "END", "VCALENDAR");
         ptran.commit();
+        return ret;
 }
 
-bool read_ical(istream &is) {
+optional<Calendar> read_ical(istream &is) {
         CALLSTACK;
         try {
-                expect_ical(is);
-                return true;
+                return expect_ical(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //       icalbody   = calprops component
-void expect_icalbody(istream &is) {
+Calendar expect_icalbody(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        expect_calprops(is);
-        expect_component(is);
+        Calendar ret;
+        ret.properties = expect_calprops(is);
+        ret.components = expect_component(is);
         ptran.commit();
+        return ret;
 }
 
 //       calprops   = *(
@@ -710,7 +732,7 @@ void expect_metvalue(istream &is) {
 }
 
 //       x-prop = x-name *(";" icalparameter) ":" value CRLF
-void expect_x_prop(istream &is) {
+XProp expect_x_prop(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         expect_x_name(is);
@@ -720,14 +742,14 @@ void expect_x_prop(istream &is) {
         expect_value(is);
         expect_newline(is);
         ptran.commit();
+        NOT_IMPLEMENTED;
 }
-bool read_x_prop(istream &is) {
+optional<XProp> read_x_prop(istream &is) {
         CALLSTACK;
         try {
-                expect_x_prop(is);
-                return true;
+                return expect_x_prop(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
@@ -749,7 +771,7 @@ string expect_x_name(istream &is) {
 
         // [vendorid "-"]
         if (auto val = read_vendorid(is)) {
-                ret += val;
+                ret += *val;
                 ret += expect_token(is, "-");
         }
 
@@ -795,14 +817,15 @@ void expect_iana_prop(istream &is) {
         expect_newline(is);
         ptran.commit();
 }
-bool read_iana_prop(istream &is) {
+optional<IanaProp> read_iana_prop(istream &is) {
         CALLSTACK;
-        return false; // TODO
+        return nullopt; // TODO
+        NOT_IMPLEMENTED;
         try {
                 expect_iana_prop(is);
-                return true;
+                //return true;
         } catch (syntax_error &) {
-                return false;
+                //return false;
         }
 }
 
@@ -1358,7 +1381,7 @@ bool read_alarmc_prop(istream &is) {
 //       alarmc     = "BEGIN" ":" "VALARM" CRLF
 //                    (audioprop / dispprop / emailprop)
 //                    "END" ":" "VALARM" CRLF
-bool read_alarmc(istream &is) {
+optional<Alarm> read_alarmc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1366,9 +1389,9 @@ bool read_alarmc(istream &is) {
                 read_alarmc_prop(is) &&
                 read_key_value(is, "END", "VALARM");
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       date-fullyear      = 4DIGIT
@@ -1686,7 +1709,7 @@ bool read_stmparam(istream &is) {
 }
 
 // dtstamp    = "DTSTAMP" stmparam ":" date-time CRLF
-bool read_dtstamp(istream &is) {
+optional<DtStamp> read_dtstamp(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1696,9 +1719,10 @@ bool read_dtstamp(istream &is) {
                 read_date_time(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 //       uidparam   = *(";" other-param)
 bool read_uidparam(istream &is) {
@@ -1712,7 +1736,7 @@ bool read_uidparam(istream &is) {
         return true;
 }
 //       uid        = "UID" uidparam ":" text CRLF
-bool read_uid(istream &is) {
+optional<Uid> read_uid(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1722,9 +1746,10 @@ bool read_uid(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 //       dtstval    = date-time / date
 bool read_dtstval(istream &is) {
@@ -1800,7 +1825,7 @@ bool read_dtstparam(istream &is) {
 }
 //       dtstart    = "DTSTART" dtstparam ":" dtstval CRLF
 //
-bool read_dtstart(istream &is) {
+optional<DtStart> read_dtstart(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1810,9 +1835,9 @@ bool read_dtstart(istream &is) {
                 read_dtstval(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       classvalue = "PUBLIC" / "PRIVATE" / "CONFIDENTIAL" / iana-token
@@ -1836,7 +1861,7 @@ bool read_classparam(istream &is) {
 }
 
 //       class      = "CLASS" classparam ":" classvalue CRLF
-bool read_class(istream &is) {
+optional<Class> read_class(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1846,9 +1871,9 @@ bool read_class(istream &is) {
                 read_classvalue(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       creaparam  = *(";" other-param)
 bool read_creaparam(istream &is) {
@@ -1859,7 +1884,7 @@ bool read_creaparam(istream &is) {
         return true;
 }
 //       created    = "CREATED" creaparam ":" date-time CRLF
-bool read_created(istream &is) {
+optional<Created> read_created(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1869,9 +1894,9 @@ bool read_created(istream &is) {
                 read_date_time(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       descparam   = *(
 //                   ;
@@ -1900,7 +1925,7 @@ bool read_descparam(istream &is) {
         return true;
 }
 //       description = "DESCRIPTION" descparam ":" text CRLF
-bool read_description(istream &is) {
+optional<Description> read_description(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1910,9 +1935,9 @@ bool read_description(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       geovalue   = float ";" float
 //       ;Latitude and Longitude components
@@ -1940,7 +1965,7 @@ bool read_geoparam(istream &is) {
         return true;
 }
 //       geo        = "GEO" geoparam ":" geovalue CRLF
-bool read_geo(istream &is) {
+optional<Geo> read_geo(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1950,9 +1975,9 @@ bool read_geo(istream &is) {
                 read_geovalue(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       lstparam   = *(";" other-param)
 bool read_lstparam(istream &is) {
@@ -1963,7 +1988,7 @@ bool read_lstparam(istream &is) {
         return true;
 }
 //       last-mod   = "LAST-MODIFIED" lstparam ":" date-time CRLF
-bool read_last_mod(istream &is) {
+optional<LastMod> read_last_mod(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -1973,9 +1998,9 @@ bool read_last_mod(istream &is) {
                 read_date_time(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       locparam   = *(
@@ -2014,7 +2039,7 @@ bool read_locparam(istream &is) {
         return true;
 }
 //       location   = "LOCATION"  locparam ":" text CRLF
-bool read_location(istream &is) {
+optional<Location> read_location(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2024,9 +2049,9 @@ bool read_location(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       orgparam   = *(
 //                  ;
@@ -2057,7 +2082,7 @@ bool read_cal_address(istream &is) {
         return true;
 }
 //       organizer  = "ORGANIZER" orgparam ":" cal-address CRLF
-bool read_organizer(istream &is) {
+optional<Organizer> read_organizer(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2067,9 +2092,9 @@ bool read_organizer(istream &is) {
                 read_cal_address(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       priovalue   = integer       ;Must be in the range [0..9]
@@ -2091,7 +2116,7 @@ bool read_prioparam(istream &is) {
 }
 //       priority   = "PRIORITY" prioparam ":" priovalue CRLF
 //       ;Default is zero (i.e., undefined).
-bool read_priority(istream &is) {
+optional<Priority> read_priority(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2101,9 +2126,9 @@ bool read_priority(istream &is) {
                 read_priovalue(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       seqparam   = *(";" other-param)
 bool read_seqparam(istream &is) {
@@ -2117,7 +2142,7 @@ bool read_seqparam(istream &is) {
         return true;
 }
 //       seq = "SEQUENCE" seqparam ":" integer CRLF     ; Default is "0"
-bool read_seq(istream &is) {
+optional<Seq> read_seq(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2127,9 +2152,9 @@ bool read_seq(istream &is) {
                 read_integer(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       statvalue-jour  = "DRAFT"        ;Indicates journal is draft.
 //                       / "FINAL"        ;Indicates journal is final.
@@ -2190,7 +2215,7 @@ bool read_statparam(istream &is) {
 }
 
 //       status          = "STATUS" statparam ":" statvalue CRLF
-bool read_status(istream &is) {
+optional<Status> read_status(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2200,9 +2225,9 @@ bool read_status(istream &is) {
                 read_statvalue(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       summparam  = *(
 //                  ;
@@ -2241,7 +2266,7 @@ bool read_summparam(istream &is) {
 }
 
 //       summary    = "SUMMARY" summparam ":" text CRLF
-bool read_summary(istream &is) {
+optional<Summary> read_summary(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2251,9 +2276,9 @@ bool read_summary(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       transparam = *(";" other-param)
@@ -2286,7 +2311,7 @@ bool read_transvalue(istream &is) {
 }
 
 //       transp     = "TRANSP" transparam ":" transvalue CRLF
-bool read_transp(istream &is) {
+optional<Transp> read_transp(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2296,9 +2321,9 @@ bool read_transp(istream &is) {
                 read_transvalue(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //      uri = <As defined in Section 3 of [RFC3986]>
 bool read_uri(istream &is) {
@@ -2319,7 +2344,7 @@ bool read_urlparam(istream &is) {
         return true;
 }
 //       url        = "URL" urlparam ":" uri CRLF
-bool read_url(istream &is) {
+optional<Url> read_url(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2329,9 +2354,9 @@ bool read_url(istream &is) {
                 read_uri(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       ridval     = date-time / date
 //       ;Value MUST match value type
@@ -2801,7 +2826,7 @@ bool read_recur(istream &is) {
 }
 
 //       recurid    = "RECURRENCE-ID" ridparam ":" ridval CRLF
-bool read_recurid(istream &is) {
+optional<RecurId> read_recurid(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2811,9 +2836,9 @@ bool read_recurid(istream &is) {
                 read_ridval(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       rrulparam  = *(";" other-param)
 bool read_rrulparam(istream &is) {
@@ -2824,7 +2849,7 @@ bool read_rrulparam(istream &is) {
         return true;
 }
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
-bool read_rrule(istream &is) {
+optional<RRule> read_rrule(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2834,9 +2859,9 @@ bool read_rrule(istream &is) {
                 read_recur(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       dtendval   = date-time / date
 //       ;Value MUST match value type
@@ -2903,7 +2928,7 @@ bool read_dtendparam(istream &is) {
         return false;
 }
 //       dtend      = "DTEND" dtendparam ":" dtendval CRLF
-bool read_dtend(istream &is) {
+optional<DtEnd> read_dtend(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2913,9 +2938,9 @@ bool read_dtend(istream &is) {
                 read_dtendval(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       durparam   = *(";" other-param)
 bool read_durparam(istream &is) {
@@ -2931,7 +2956,7 @@ bool read_durparam(istream &is) {
 }
 //       duration   = "DURATION" durparam ":" dur-value CRLF
 //                    ;consisting of a positive duration of time.
-bool read_duration(istream &is) {
+optional<Duration> read_duration(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -2941,9 +2966,9 @@ bool read_duration(istream &is) {
                 read_dur_value(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       attachparam = *(
@@ -2982,14 +3007,14 @@ bool read_attachparam(istream &is) {
 //                        ":" binary
 //                    )
 //                    CRLF
-bool read_attach(istream &is) {
+optional<Attach> read_attach(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
 
         const auto match_head =
                 read_token(is, "ATTACH") && read_attachparam(is);
         if (!match_head)
-                return false;
+                return nullopt;
 
         // ":" uri
         {
@@ -3001,7 +3026,7 @@ bool read_attach(istream &is) {
                 if (match_uri) {
                         ptran_uri.commit();
                         ptran.commit();
-                        return true;
+                        NOT_IMPLEMENTED;
                 }
         }
 
@@ -3023,11 +3048,11 @@ bool read_attach(istream &is) {
                 if (match_enc) {
                         ptran_enc.commit();
                         ptran.commit();
-                        return true;
+                        NOT_IMPLEMENTED;
                 }
         }
 
-        return false;
+        return nullopt;
 }
 //       attparam   = *(
 //                  ;
@@ -3055,7 +3080,7 @@ bool read_attparam(istream &is) {
         return true;
 }
 //       attendee   = "ATTENDEE" attparam ":" cal-address CRLF
-bool read_attendee(istream &is) {
+optional<Attendee> read_attendee(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
@@ -3065,9 +3090,9 @@ bool read_attendee(istream &is) {
                 read_cal_address(is) &&
                 read_newline(is);
         if (!match)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       catparam   = *(
 //                  ;
@@ -3097,7 +3122,7 @@ bool read_catparam(istream &is) {
 }
 //       categories = "CATEGORIES" catparam ":" text *("," text)
 //                    CRLF
-bool read_categories (istream &is) {
+optional<Categories> read_categories (istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
@@ -3106,16 +3131,16 @@ bool read_categories (istream &is) {
                 read_token(is, ":") &&
                 read_text(is);
         if (!match)
-                return false;
+                return nullopt;
         while (read_token(is, ",")) {
                 if (!read_text(is))
-                        return false;
+                        return nullopt;
         }
         if (!read_newline(is))
-                return false;
+                return nullopt;
 
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       commparam  = *(
 //                  ;
@@ -3146,7 +3171,7 @@ bool read_commparam(istream &is) {
         return true;
 }
 //       comment    = "COMMENT" commparam ":" text CRLF
-bool read_comment(istream &is) {
+optional<Comment> read_comment(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
@@ -3156,9 +3181,9 @@ bool read_comment(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!match)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       contparam  = *(
 //                  ;
@@ -3189,7 +3214,7 @@ bool read_contparam(istream &is) {
         return true;
 }
 //       contact    = "CONTACT" contparam ":" text CRLF
-bool read_contact(istream &is) {
+optional<Contact> read_contact(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
@@ -3199,9 +3224,9 @@ bool read_contact(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!match)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       exdtval    = date-time / date
 //       ;Value MUST match value type
@@ -3235,7 +3260,7 @@ bool read_exdtparam(istream &is) {
         return true;
 }
 //       exdate     = "EXDATE" exdtparam ":" exdtval *("," exdtval) CRLF
-bool read_exdate(istream &is) {
+optional<ExDate> read_exdate(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
@@ -3244,15 +3269,15 @@ bool read_exdate(istream &is) {
                 read_token(is, ":") &&
                 read_exdtval(is);
         if (!match)
-                return false;
+                return nullopt;
         while (read_token(is, ",")) {
                 if (!read_exdtval(is))
-                        return false;
+                        return nullopt;
         }
         if (!read_newline(is))
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       extdata    = text
@@ -3317,7 +3342,7 @@ bool read_rstatparam(istream &is) {
 
 //       rstatus    = "REQUEST-STATUS" rstatparam ":"
 //                    statcode ";" statdesc [";" extdata]
-bool read_rstatus(istream &is) {
+optional<RStatus> read_rstatus(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3329,9 +3354,9 @@ bool read_rstatus(istream &is) {
                 read_statdesc(is) &&
                 (read_token(is, ";") ? read_extdata(is) : true);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       reltypeparam       = "RELTYPE" "="
 //                           ("PARENT"    ; Parent relationship - Default
@@ -3386,7 +3411,7 @@ bool read_relparam(istream &is) {
         return true;
 }
 //       related    = "RELATED-TO" relparam ":" text CRLF
-bool read_related(istream &is) {
+optional<Related> read_related(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3396,16 +3421,17 @@ bool read_related(istream &is) {
                 read_text(is) &&
                 read_newline(is);
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       resrcparam = *(
 //                  ;
 //                  ; The following are OPTIONAL,
 //                  ; but MUST NOT occur more than once.
 //                  ;
-//                  (";" altrepparam) / (";" languageparam) /
+//                  (";" altrepparam) /
+//                  (";" languageparam) /
 //                  ;
 //                  ; The following is OPTIONAL,
 //                  ; and MAY occur more than once.
@@ -3421,7 +3447,7 @@ bool read_resrcparam(istream &is) {
         return true;
 }
 //       resources  = "RESOURCES" resrcparam ":" text *("," text) CRLF
-bool read_resources(istream &is) {
+optional<Resources> read_resources(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3430,15 +3456,15 @@ bool read_resources(istream &is) {
                 read_token(is, ":") &&
                 read_text(is);
         if (!success)
-                return false;
+                return nullopt;
         while (read_token(is, ",")) {
                 if (!read_text(is))
-                        return false;
+                        return nullopt;
         }
         if (!read_newline(is))
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 //       rdtval     = date-time / date / period
 //       ;Value MUST match value type
@@ -3512,7 +3538,7 @@ bool read_rdtparam(istream &is) {
         return true;
 }
 //       rdate      = "RDATE" rdtparam ":" rdtval *("," rdtval) CRLF
-bool read_rdate(istream &is) {
+optional<RDate> read_rdate(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3521,15 +3547,15 @@ bool read_rdate(istream &is) {
                 read_token(is, ":") &&
                 read_rdtval(is);
         if (!success)
-                return false;
+                return nullopt;
         while (read_token(is, ",")) {
                 if (!read_rdtval(is))
-                        return false;
+                        return nullopt;
         }
         if (!read_newline(is))
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
 }
 
 //       eventprop  = *(
@@ -3592,68 +3618,88 @@ bool read_rdate(istream &is) {
 //                  contact / exdate / rstatus / related /
 //                  resources / rdate / x-prop / iana-prop
 //               )
-bool read_eventprop_single(istream &is) {
+optional<EventProp> read_eventprop_single(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_dtstamp(is) || read_uid(is) ||
+        EventProp ret;
+        if (auto v = read_dtstamp(is)) ret = *v;
+        else if (auto v = read_uid(is)) ret = *v;
 
-                read_dtstart(is) ||
+        else if (auto v = read_dtstart(is)) ret = *v;
 
-                read_class(is) || read_created(is) || read_description(is) ||
-                read_geo(is) || read_last_mod(is) || read_location(is) ||
-                read_organizer(is) || read_priority(is) || read_seq(is) ||
-                read_rstatus(is) || read_summary(is) || read_transp(is) ||
-                read_url(is) || read_recurid(is) ||
+        else if (auto v = read_class(is)) ret = *v;
+        else if (auto v = read_created(is)) ret = *v;
+        else if (auto v = read_description(is)) ret = *v;
+        else if (auto v = read_geo(is)) ret = *v;
+        else if (auto v = read_last_mod(is)) ret = *v;
+        else if (auto v = read_location(is)) ret = *v;
+        else if (auto v = read_organizer(is)) ret = *v;
+        else if (auto v = read_priority(is)) ret = *v;
+        else if (auto v = read_seq(is)) ret = *v;
+        else if (auto v = read_status(is)) ret = *v;
+        else if (auto v = read_summary(is)) ret = *v;
+        else if (auto v = read_transp(is)) ret = *v;
+        else if (auto v = read_url(is)) ret = *v;
+        else if (auto v = read_recurid(is)) ret = *v;
 
-                read_rrule(is) ||
+        else if (auto v = read_rrule(is)) ret = *v;
 
-                read_dtend(is) || read_duration(is) ||
+        else if (auto v = read_dtend(is)) ret = *v;
+        else if (auto v = read_duration(is)) ret = *v;
 
-                read_attach(is) || read_attendee(is) || read_categories (is) ||
-                read_comment(is) || read_contact(is) || read_exdate(is) ||
-                read_rstatus(is) || read_related(is) || read_resources(is) ||
-                read_rdate(is) || read_x_prop(is) || read_iana_prop(is)
-        ;
-        if (!success) {
-                return false;
-        }
+        else if (auto v = read_attach(is)) ret = *v;
+        else if (auto v = read_attendee(is)) ret = *v;
+        else if (auto v = read_categories (is)) ret = *v;
+        else if (auto v = read_comment(is)) ret = *v;
+        else if (auto v = read_contact(is)) ret = *v;
+        else if (auto v = read_exdate(is)) ret = *v;
+        else if (auto v = read_rstatus(is)) ret = *v;
+        else if (auto v = read_related(is)) ret = *v;
+        else if (auto v = read_resources(is)) ret = *v;
+        else if (auto v = read_rdate(is)) ret = *v;
+        else if (auto v = read_x_prop(is)) ret = *v;
+        else if (auto v = read_iana_prop(is)) ret = *v;
+
+        else return nullopt;
 
         ptran.commit();
-        return true;
+        return ret;
 }
-bool read_eventprop(istream &is) {
+optional<vector<EventProp>> read_eventprop(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_eventprop_single(is)) {
+        vector<EventProp> ret;
+        while (auto v = read_eventprop_single(is)) {
+                ret.push_back(*v);
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       eventc     = "BEGIN" ":" "VEVENT" CRLF
 //                    eventprop *alarmc
 //                    "END" ":" "VEVENT" CRLF
-bool read_eventc(istream &is) {
+optional<EventComp> read_eventc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success_pro =
-                read_key_value(is, "BEGIN", "VEVENT") &&
-                read_eventprop(is);
-        if (!success_pro) {
-                return false;
+        EventComp ret;
+        if (read_key_value(is, "BEGIN", "VEVENT"))
+                return nullopt;
+        if (auto v = read_eventprop(is)) {
+                ret.properties = *v;
+        } else {
+                return nullopt;
         }
 
-        while(read_alarmc(is)) {
+        while(auto v = read_alarmc(is)) {
+                ret.alarms.push_back(*v);
         }
 
-        const auto success_epi =
-                read_key_value(is, "END", "VEVENT") ;
-        if (!success_epi)
-                return false;
+        if (!read_key_value(is, "END", "VEVENT"))
+                return nullopt;
 
         ptran.commit();
-        return true;
+        return ret;
 }
 
 
@@ -3702,14 +3748,14 @@ bool read_todoprop(istream &is) {
 //       todoc      = "BEGIN" ":" "VTODO" CRLF
 //                    todoprop *alarmc
 //                    "END" ":" "VTODO" CRLF
-bool read_todoc(istream &is) {
+optional<TodoComp> read_todoc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VTODO") &&
                 read_todoprop(is);
         if (!success_pro)
-                return false;
+                return nullopt;
 
         while(read_alarmc(is)) {
         }
@@ -3717,11 +3763,11 @@ bool read_todoc(istream &is) {
         const auto success_epi =
                 read_key_value(is, "END", "VTODO") ;
         if (!success_epi)
-                return false;
+                return nullopt;
 
         ptran.commit();
-
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 //       jourprop   = *(
@@ -3759,7 +3805,7 @@ bool read_jourprop(istream &is) {
 //       journalc   = "BEGIN" ":" "VJOURNAL" CRLF
 //                    jourprop
 //                    "END" ":" "VJOURNAL" CRLF
-bool read_journalc(istream &is) {
+optional<JournalComp> read_journalc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3767,9 +3813,10 @@ bool read_journalc(istream &is) {
                 read_jourprop(is) &&
                 read_key_value(is, "END", "VJOURNAL") ;
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 //       fbprop     = *(
@@ -3800,7 +3847,7 @@ bool read_fbprop(istream &is) {
 //       freebusyc  = "BEGIN" ":" "VFREEBUSY" CRLF
 //                    fbprop
 //                    "END" ":" "VFREEBUSY" CRLF
-bool read_freebusyc(istream &is) {
+optional<FreeBusyComp> read_freebusyc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
@@ -3808,9 +3855,10 @@ bool read_freebusyc(istream &is) {
                 read_fbprop(is) &&
                 read_key_value(is, "END", "VFREEBUSY") ;
         if (!success)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 bool read_tzid(istream &is) {
@@ -3887,14 +3935,14 @@ bool read_standardc(istream &is) {
 //                    ;
 //                    )
 //                    "END" ":" "VTIMEZONE" CRLF
-bool read_timezonec(istream &is) {
+optional<TimezoneComp> read_timezonec(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
                 read_key_value(is, "BEGIN", "VTIMEZONE") &&
                 read_todoprop(is);
         if (!success_pro)
-                return false;
+                return nullopt;
 
         while(read_tzid(is) ||
               read_last_mod(is) ||
@@ -3908,16 +3956,17 @@ bool read_timezonec(istream &is) {
         const auto success_epi =
                 read_key_value(is, "END", "VTIMEZONE") ;
         if (!success_epi)
-                return false;
+                return nullopt;
 
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 //       iana-comp  = "BEGIN" ":" iana-token CRLF
 //                    1*contentline
 //                    "END" ":" iana-token CRLF
-bool read_iana_comp(istream &is) {
+optional<IanaComp> read_iana_comp(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
@@ -3926,10 +3975,10 @@ bool read_iana_comp(istream &is) {
                 read_iana_token(is) &&
                 read_newline(is);
         if (!success_pro)
-                return false;
+                return nullopt;
 
         if (!read_contentline(is))
-                return false;
+                return nullopt;
         while(read_contentline(is)) {
         }
 
@@ -3939,16 +3988,17 @@ bool read_iana_comp(istream &is) {
                 read_iana_token(is) &&
                 read_newline(is);
         if (!success_epi)
-                return false;
+                return nullopt;
 
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 //       x-comp     = "BEGIN" ":" x-name CRLF
 //                    1*contentline
 //                    "END" ":" x-name CRLF
-bool read_x_comp(istream &is) {
+optional<XComp> read_x_comp(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
@@ -3957,10 +4007,10 @@ bool read_x_comp(istream &is) {
                 read_x_name(is) &&
                 read_newline(is);
         if (!success_pro)
-                return false;
+                return nullopt;
 
         if (!read_contentline(is))
-                return false;
+                return nullopt;
         while(read_contentline(is)) {
         }
 
@@ -3970,42 +4020,47 @@ bool read_x_comp(istream &is) {
                 read_x_name(is) &&
                 read_newline(is);
         if (!success_epi)
-                return false;
+                return nullopt;
 
         ptran.commit();
-        return true;
+        NOT_IMPLEMENTED;
+        //return true;
 }
 
 //       component  = 1*(eventc / todoc / journalc / freebusyc /
 //                    timezonec / iana-comp / x-comp)
 //
-bool read_component_single(istream &is) {
+optional<Component> read_component_single(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success = read_eventc(is)
-                             || read_todoc(is)
-                             || read_journalc(is)
-                             || read_freebusyc(is)
-                             || read_timezonec(is)
-                             || read_iana_comp(is)
-                             || read_x_comp(is);
-        if (!success)
-                return false;
+        Component ret;
+        if (auto v = read_eventc(is)) ret = *v;
+        else if (auto v = read_todoc(is)) ret = *v;
+        else if (auto v = read_journalc(is)) ret = *v;
+        else if (auto v = read_freebusyc(is)) ret = *v;
+        else if (auto v = read_timezonec(is)) ret = *v;
+        else if (auto v = read_iana_comp(is)) ret = *v;
+        else if (auto v = read_x_comp(is)) ret = *v;
+        else return nullopt;
         ptran.commit();
-        return true;
+        return ret;
 }
-void expect_component_single(istream &is) {
+Component expect_component_single(istream &is) {
         CALLSTACK;
-        if (!read_component_single(is))
-                throw syntax_error(is.tellg());
+        if (auto v = read_component_single(is))
+                return *v;
+        throw syntax_error(is.tellg());
 }
-void expect_component(istream &is) {
+vector<Component> expect_component(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        expect_component_single(is);
-        while(read_component_single(is)) {
+        vector<Component> ret;
+        ret.push_back(expect_component_single(is));
+        while(auto v = read_component_single(is)) {
+                ret.push_back(*v);
         }
         ptran.commit();
+        return ret;
 }
 
 bool read_dquoted_value(istream &is) {

@@ -85,13 +85,21 @@ private:
 
 class not_implemented : public std::runtime_error {
 public:
-        not_implemented(std::istream::pos_type pos, std::string const &what) :
-                std::runtime_error("Not implemented: " + what), pos(pos)
+        not_implemented(std::istream::pos_type pos,
+                        std::string const &what,
+                        std::string const &file,
+                        int line) :
+                std::runtime_error(
+                        what +
+                        " [Line " + std::to_string(line) + ", " +
+                        " File '" + file + "']"
+                ),
+                pos(pos)
         {}
 
         std::istream::pos_type pos = 0;
 };
-#define NOT_IMPLEMENTED do{throw not_implemented(is.tellg(), __func__);}while(false)
+#define NOT_IMPLEMENTED do{throw not_implemented(is.tellg(), __func__, __FILE__, __LINE__);}while(false)
 
 void print_location(std::istream::pos_type pos, std::istream &is);
 
