@@ -21,7 +21,6 @@
 #include <istream>
 
 // -- Typedefs. ----------------------------------------------------------------
-using string = std::string;
 
 
 // -- Forward declarations. ----------------------------------------------------
@@ -31,7 +30,7 @@ bool read_attendee(std::istream &);
 bool read_calscale(std::istream &);
 bool read_control(std::istream &);
 bool read_description(std::istream &);
-bool read_dquote(std::istream &is);
+optional<string> read_dquote(std::istream &is);
 bool read_dur_value(std::istream &is);
 bool read_duration(std::istream &is);
 bool read_fmttypeparam(std::istream &is);
@@ -41,24 +40,23 @@ bool read_iana_token(std::istream &);
 bool read_icalparameter(std::istream &);
 bool read_languageparam(std::istream &is);
 bool read_method(std::istream &);
-bool read_newline(std::istream &);
 bool read_non_us_ascii(std::istream &);
 bool read_other_param(std::istream &);
 bool read_param_value(std::istream &);
 bool read_paramtext(std::istream &);
-bool read_prodid(std::istream &);
+optional<ProdId> read_prodid(std::istream &);
 bool read_quoted_string(std::istream &);
 bool read_qvalue_char(std::istream &);
 bool read_rangeparam(std::istream &is);
 bool read_safe_char(std::istream &);
 bool read_summary(std::istream &);
-bool read_text(std::istream &);
+optional<string> read_text(std::istream &);
 bool read_trigrelparam(std::istream &is);
 bool read_tzidparam(std::istream &is);
 bool read_value_char(std::istream &);
 bool read_vendorid(std::istream &);
-bool read_version(std::istream &);
-bool read_x_name(std::istream &);
+optional<Version> read_version(std::istream &);
+optional<string> read_x_name(std::istream &);
 bool read_x_param(std::istream &);
 bool read_x_prop(std::istream &);
 void expect_calparam(std::istream &);
@@ -76,36 +74,25 @@ void expect_method(std::istream &);
 void expect_metparam(std::istream &);
 void expect_metvalue(std::istream &);
 void expect_name(std::istream &);
-void expect_other_param(std::istream &);
+OtherParam expect_other_param(std::istream &);
 void expect_param(std::istream &);
 void expect_param_name(std::istream &);
 void expect_param_value(std::istream &);
-void expect_pidparam(std::istream &);
-void expect_pidvalue(std::istream &);
-void expect_prodid(std::istream &);
-void expect_text(std::istream &);
-void expect_value(std::istream &);
-void expect_verparam(std::istream &);
-void expect_version(std::istream &);
-void expect_vervalue(std::istream &);
-void expect_x_name(std::istream &);
+std::vector<OtherParam> expect_pidparam(std::istream &);
+string expect_pidvalue(std::istream &);
+ProdId expect_prodid(std::istream &);
+string expect_text(std::istream &);
+string expect_value(std::istream &);
+std::vector<OtherParam> expect_verparam(std::istream &);
+Version expect_version(std::istream &);
+string expect_vervalue(std::istream &);
+string expect_x_name(std::istream &);
 void expect_x_prop(std::istream &);
-
-void print_location(std::istream::pos_type pos, std::istream &is);
 
 // -- Exceptions. --------------------------------------------------------------
 class invalid_ical : public std::runtime_error {
 public:
         invalid_ical() : std::runtime_error("Invalid ICalendar file") {}
-};
-
-class not_implemented : public std::runtime_error {
-public:
-        not_implemented(std::istream::pos_type pos, std::string const &what) :
-                std::runtime_error("Not implemented: " + what), pos(pos)
-        {}
-
-        std::istream::pos_type pos = 0;
 };
 
 class syntax_error : public std::runtime_error {

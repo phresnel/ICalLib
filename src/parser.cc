@@ -5,904 +5,8 @@
 #include <vector>
 #include <optional>
 #include <iostream>
-
-class CallStack {
-public:
-        class Entry {
-        public:
-                Entry() = delete;
-                Entry(Entry const &) = delete;
-                Entry& operator= (Entry const &) = delete;
-
-                Entry(Entry &&other) {
-                        entries_ = other.entries_;
-                        other.entries_ = nullptr;
-                }
-                Entry& operator= (Entry &&other) {
-                        entries_ = other.entries_;
-                        other.entries_ = nullptr;
-                }
-
-                Entry(std::vector<const char*> &entries, const char *what)
-                        : entries_(&entries)
-                {
-                        entries_->push_back(what);
-
-                        std::cerr << "  ";
-                        for (auto i=0; i<entries_->size(); ++i)
-                                std::cerr << "  ";
-                        std::cerr << "entered " << what << "\n";
-                }
-                ~Entry() {
-                        if (entries_)
-                                entries_->pop_back();
-                }
-        private:
-                friend class CallStack;
-                std::vector<const char*> *entries_;
-        };
-
-        CallStack() = default;
-        CallStack(CallStack const&) = default;
-        CallStack& operator= (CallStack const&) = default;
-
-        Entry push(const char* name) {
-                Entry ret {entries_, name};
-                //std::cerr << *this;
-                return std::move(ret);
-        }
-
-        friend std::ostream& operator<< (
-                std::ostream& os, CallStack const &cs
-        ) {
-                os << "CallStack{\n";
-                for (auto i=0; i!=cs.entries_.size(); ++i) {
-                        /*os << " ..";
-                        for (auto x=0; x!=i; ++x) {
-                                os << "..";
-                        }*/
-                        os << "  " << cs.entries_[i] << "\n";
-                }
-                os << "}\n";
-                return os;
-        }
-private:
-
-        std::vector<const char*> entries_;
-};
-
-//CallStack callStack;
-//#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
-//*/
-#define CALLSTACK
-
-#define NOT_IMPLEMENTED do{throw not_implemented(is.tellg(), __func__);}while(false)
-
-void print_location(std::istream::pos_type pos, std::istream &is) {
-        const auto where = pos;
-        is.seekg(0);
-        int line = 1, col = 1;
-        while(is.tellg() < where) {
-                if(read_newline(is)) {
-                        col = 1;
-                        ++line;
-                } else {
-                        auto g = is.get();
-                        //std::cout << "[" << (char)g << "]";
-                }
-        }
-        std::cerr << " (in line " << line << ":" << col << ")\n";
-}
-
-// -- Utils. -------------------------------------------------------------------
-class save_flags final {
-        std::ios *s_;
-        std::ios::fmtflags flags_;
-public:
-        explicit save_flags(std::ios &s) : s_(&s), flags_(s.flags()) { }
-        ~save_flags() {
-                if (s_ != nullptr) {
-                        try {
-                                s_->flags(flags_);
-                        } catch(...) {
-                                // must not throw here.
-                        }
-                }
-        }
-
-        save_flags(save_flags &&) = default;
-        save_flags& operator= (save_flags &&) = default;
-
-        save_flags() = delete;
-        save_flags(save_flags const &) = delete;
-        save_flags& operator= (save_flags const &) = delete;
-
-        void commit() { s_ = nullptr; }
-};
-
-class save_input_pos final {
-        std::istream *s_;
-        std::istream::pos_type pos_;
-public:
-        explicit save_input_pos(std::istream &s) : s_(&s), pos_(s.tellg()) { }
-        ~save_input_pos() {
-                if (s_ != nullptr) {
-                        try { s_->seekg(pos_); }
-                        catch(...) { /* must not throw here. */ }
-                }
-        }
-
-        save_input_pos(save_input_pos &&) = default;
-        save_input_pos& operator= (save_input_pos &&) = default;
-
-        save_input_pos() = delete;
-        save_input_pos(save_input_pos const &) = delete;
-        save_input_pos& operator= (save_input_pos const &) = delete;
-
-        void commit() { s_ = nullptr; }
-};
-
-// -- Parser Helpers. ----------------------------------------------------------
-void expect_token(std::istream &is, string const &tok) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        for (auto &c : tok) {
-                const auto i = is.get();
-                if(i == EOF) {
-                        throw unexpected_token(is.tellg(), tok);
-                }
-                if(i != c) {
-                        throw unexpected_token(is.tellg(), tok);
-                }
-        }
-        ptran.commit();
-}
-
-bool read_token(std::istream &is, string const &tok) {
-        CALLSTACK;
-        try {
-                expect_token(is, tok);
-                return true;
-        } catch(syntax_error &) {
-                return false;
-        }
-}
-
-bool read_eof(std::istream &is) {
-        save_input_pos ptran(is);
-        const auto c = is.get();
-        if (c != EOF)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-void expect_newline(std::istream &is) {
-        CALLSTACK;
-        // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
-        if (!(read_token(is, "\r\n") ||
-              read_token(is, "\n") ||
-              read_token(is, "\r") ||
-              read_eof(is))
-                ) {
-                throw unexpected_token(is.tellg());
-        }
-}
-
-bool read_newline(std::istream &is) {
-        CALLSTACK;
-        try {
-                expect_newline(is);
-                return true;
-        } catch (syntax_error &) {
-                return false;
-        }
-}
-
-bool read_hex(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto i = is.get();
-        switch(i) {
-        default:
-        case EOF:
-                return false;
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-        case 'a':
-        case 'A':
-        case 'b':
-        case 'B':
-        case 'c':
-        case 'C':
-        case 'd':
-        case 'D':
-        case 'e':
-        case 'E':
-        case 'f':
-        case 'F':
-                break;
-        }
-
-        ptran.commit();
-        return true;
-}
-
-void expect_alpha(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto i = is.get();
-        switch(i) {
-        default:
-        case EOF:
-                throw syntax_error(is.tellg());
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-                break;
-        }
-        ptran.commit();
-}
-
-bool read_alpha(std::istream &is) {
-        CALLSTACK;
-        try {
-                expect_alpha(is);
-                return true;
-        } catch (syntax_error &) {
-                return false;
-        }
-}
-
-
-void expect_digit(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto i = is.get();
-        if (i<'0' || i>'9')
-                throw syntax_error(is.tellg(), "expected digit");
-        ptran.commit();
-}
-
-bool read_digit(std::istream &is) {
-        CALLSTACK;
-        try {
-                expect_digit(is);
-                return true;
-        } catch (syntax_error &) {
-                return false;
-        }
-}
-
-bool read_digits(std::istream &is, int at_least, int at_most = -1) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        int c = 0;
-        while (read_digit(is) && (at_most<0 || c<at_most)) {
-                ++c;
-        }
-
-        if (at_least >= 0 && c<at_least)
-                return false;
-        if (at_most >= 0 && c>at_most)
-                return false;
-
-        ptran.commit();
-        return true;
-}
-
-void expect_alnum(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_alpha(is) || read_digit(is);
-        if (!success) {
-                throw syntax_error(is.tellg(), "expected alpha or digit");
-        }
-        ptran.commit();
-}
-
-bool read_alnum(std::istream &is) {
-        CALLSTACK;
-        try {
-                expect_alnum(is);
-                return true;
-        } catch (syntax_error &) {
-                return false;
-        }
-}
-
-
-// -- URI (RFC 3986) Parser Helpers. ------------------------------------
-
-inline namespace rfc3986 {
-//      gen-delims  = ":" / "/" / "?" / "#" / "[" / "]" / "@"
-bool read_gen_delims(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto i = is.get();
-        switch (i) {
-        default:
-        case EOF:
-                return false;
-        case ':':
-        case '/':
-        case '?':
-        case '#':
-        case '[':
-        case ']':
-        case '@':
-                break;
-        }
-        ptran.commit();
-        return true;
-}
-
-//      sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
-//                  / "*" / "+" / "," / ";" / "="
-bool read_sub_delims(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto i = is.get();
-        switch (i) {
-        default:
-        case EOF:
-                return false;
-        case '!':
-        case '$':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case '+':
-        case ',':
-        case ';':
-        case '=':
-                break;
-        }
-        ptran.commit();
-        return true;
-}
-
-//      reserved    = gen-delims / sub-delims
-bool read_reserved(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_gen_delims(is) ||
-                read_sub_delims(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
-bool read_unreserved(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_alpha(is) ||
-                read_digit(is) ||
-                read_token(is, "-") ||
-                read_token(is, ".") ||
-                read_token(is, "_") ||
-                read_token(is, "~");
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-// pct-encoded = "%" HEXDIG HEXDIG
-bool read_pct_encoded(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "%") ||
-                read_hex(is) ||
-                read_hex(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      pchar         = unreserved / pct-encoded / sub-delims / ":" / "@"
-bool read_pchar(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_unreserved(is) ||
-                read_pct_encoded(is) ||
-                read_sub_delims(is) ||
-                read_token(is, ":") ||
-                read_token(is, "@");
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      segment       = *pchar
-bool read_segment(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        while (read_pchar(is)) {
-        }
-        ptran.commit();
-        return true;
-}
-
-//      segment-nz    = 1*pchar
-bool read_segment_nz(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        if (!read_pchar(is))
-                return false;
-        while (read_pchar(is)) {
-        }
-        ptran.commit();
-        return true;
-}
-
-//      segment-nz-nc = 1*( unreserved / pct-encoded / sub-delims / "@" )
-//                    ; non-zero-length segment without any colon ":"
-bool read_segment_nz_nc_single(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_unreserved(is) ||
-                read_pct_encoded(is) ||
-                read_sub_delims(is) ||
-                read_token(is, "@");
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-bool read_segment_nz_nc(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        if (!read_segment_nz_nc_single(is))
-                return false;
-        while (read_segment_nz_nc_single(is)) {
-        }
-        ptran.commit();
-        return true;
-}
-
-//      path-abempty  = *( "/" segment )
-bool read_path_abempty(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        while (read_token(is, "/")) {
-                if (!read_segment(is))
-                        return false;
-        }
-        ptran.commit();
-        return true;
-}
-
-//      path-absolute = "/" [ segment-nz *( "/" segment ) ]
-bool read_path_absolute(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        if (!read_token(is, "/"))
-                return false;
-        if (read_segment_nz(is)) {
-                while (read_token(is, "/")) {
-                        if (!read_segment(is))
-                                return false;
-                }
-        }
-        ptran.commit();
-        return true;
-}
-
-//      path-noscheme = segment-nz-nc *( "/" segment )
-bool read_path_noscheme(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        if (!read_segment_nz_nc(is))
-                return false;
-        while (read_token(is, "/")) {
-                if (!read_segment(is))
-                        return false;
-        }
-        ptran.commit();
-        return true;
-}
-
-//      path-rootless = segment-nz *( "/" segment )
-bool read_path_rootless(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        if (!read_segment_nz(is))
-                return false;
-        while (read_token(is, "/")) {
-                if (!read_segment(is))
-                        return false;
-        }
-        ptran.commit();
-        return true;
-}
-
-//      path-empty    = 0<pchar>
-bool read_path_empty(std::istream &is) {
-        CALLSTACK;
-        return true;
-}
-
-//      path          = path-abempty    ; begins with "/" or is empty
-//                    / path-absolute   ; begins with "/" but not "//"
-//                    / path-noscheme   ; begins with a non-colon segment
-//                    / path-rootless   ; begins with a segment
-//                    / path-empty      ; zero characters
-bool read_path(std::istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_path_abempty(is) ||
-                read_path_absolute(is) ||
-                read_path_noscheme(is) ||
-                read_path_rootless(is) ||
-                read_path_empty(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      port        = *DIGIT
-bool read_port(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      reg-name    = *( unreserved / pct-encoded / sub-delims )
-bool read_reg_name(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
-bool read_IPv4address(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      dec-octet   = DIGIT                 ; 0-9
-//                  / %x31-39 DIGIT         ; 10-99
-//                  / "1" 2DIGIT            ; 100-199
-//                  / "2" %x30-34 DIGIT     ; 200-249
-//                  / "25" %x30-35          ; 250-255
-bool read_dec_octet(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      IPv6address =                            6( h16 ":" ) ls32
-//                  /                       "::" 5( h16 ":" ) ls32
-//                  / [               h16 ] "::" 4( h16 ":" ) ls32
-//                  / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
-//                  / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
-//                  / [ *3( h16 ":" ) h16 ] "::"    h16 ":"   ls32
-//                  / [ *4( h16 ":" ) h16 ] "::"              ls32
-//                  / [ *5( h16 ":" ) h16 ] "::"              h16
-//                  / [ *6( h16 ":" ) h16 ] "::"
-bool read_IPv6address(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//
-//      ls32        = ( h16 ":" h16 ) / IPv4address
-//                  ; least-significant 32 bits of address
-bool read_ls32(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//
-//      h16         = 1*4HEXDIG
-//                  ; 16 bits of address represented in hexadecimal
-bool read_h16(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
-bool read_IP_literal(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      IPvFuture  = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
-bool read_IPvFuture(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      host        = IP-literal / IPv4address / reg-name
-bool read_host(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
-bool read_userinfo(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      authority   = [ userinfo "@" ] host [ ":" port ]
-bool read_authority(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      relative-part = "//" authority path-abempty
-//                    / path-absolute
-//                    / path-noscheme
-//                    / path-empty
-bool read_relative_part(std::istream &is) {
-        CALLSTACK;
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, "//") &&
-                        read_authority(is) &&
-                        read_path_abempty(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        {
-                save_input_pos ptran(is);
-                const auto success = read_path_absolute(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        {
-                save_input_pos ptran(is);
-                const auto success = read_path_noscheme(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        {
-                save_input_pos ptran(is);
-                const auto success = read_path_empty(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        return false;
-}
-
-//      URI-reference = URI / relative-ref
-bool read_URI_reference(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      fragment    = *( pchar / "/" / "?" )
-bool read_fragment(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      query       = *( pchar / "/" / "?" )
-bool read_query(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      hier-part   = "//" authority path-abempty
-//                  / path-absolute
-//                  / path-rootless
-//                  / path-empty
-bool read_hier_part(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      URI         = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
-bool read_URI(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      absolute-URI  = scheme ":" hier-part [ "?" query ]
-bool read_absolute_URI(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
-//      relative-ref  = relative-part [ "?" query ] [ "#" fragment ]
-bool read_relative_ref(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success = false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-}
+#include "rfc3986.hh"
+#include "parser_helpers.hh"
 
 // -- Media Type (RFC 4288) Parser Helpers. ------------------------------------
 inline namespace rfc4288 {
@@ -1015,22 +119,26 @@ bool read_language_tag(std::istream &is) {
 
 // -- ABNF (RFC 5234) Parser Helpers. ------------------------------------------
 inline namespace rfc5234 {
-bool read_htab(std::istream &is) {
+optional<string> read_htab(std::istream &is) {
         CALLSTACK;
         // HTAB = %x09
         return read_token(is, "\t");
 }
 
-bool read_sp(std::istream &is) {
+optional<string> read_sp(std::istream &is) {
         CALLSTACK;
         // SP = %x20
         return read_token(is, " ");
 }
 
-bool read_wsp(std::istream &is) {
+optional<string> read_wsp(std::istream &is) {
         CALLSTACK;
         // WSP = SP / HTAB ; white space
-        return read_sp(is) || read_htab(is);
+        if (auto val = read_sp(is))
+                return val;
+        if (auto val = read_htab(is))
+                return val;
+        return nullopt;
 }
 
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
@@ -1425,10 +533,13 @@ bool read_control(std::istream &is) {
 }
 
 //     value         = *VALUE-CHAR
-void expect_value(std::istream &is) {
+string expect_value(std::istream &is) {
         CALLSTACK;
-        while (read_value_char(is)) {
+        string ret;
+        while (auto c = read_value_char(is)) {
+                ret += c;
         }
+        return ret;
 }
 
 
@@ -1564,8 +675,8 @@ CalProps expect_calprops(std::istream &is) {
             calscalec = 0,
             methodc = 0;
         while (true) {
-                if (read_prodid(is)) {
-                        // ret.prodId = ...
+                if (auto val = read_prodid(is)) {
+                        ret.prodId = *val;
                         ++prodidc;
                 } else if (read_version(is)) {
                         // ret.version = ...
@@ -1585,54 +696,61 @@ CalProps expect_calprops(std::istream &is) {
 }
 
 //       prodid     = "PRODID" pidparam ":" pidvalue CRLF
-void expect_prodid(std::istream &is) {
+ProdId expect_prodid(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        ProdId ret;
         expect_token(is, "PRODID");
-        expect_pidparam(is);
+        ret.params = expect_pidparam(is);
         expect_token(is, ":");
-        expect_pidvalue(is);
+        ret.value = expect_pidvalue(is);
         expect_newline(is);
         ptran.commit();
+        return ret;
 }
-bool read_prodid(std::istream &is) {
+optional<ProdId> read_prodid(std::istream &is) {
         CALLSTACK;
         try {
-                expect_prodid(is);
-                return true;
+                return expect_prodid(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //       version    = "VERSION" verparam ":" vervalue CRLF
-void expect_version(std::istream &is) {
+Version expect_version(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        Version ret;
         expect_token(is, "VERSION");
-        expect_verparam(is);
+        ret.params = expect_verparam(is);
         expect_token(is, ":");
-        expect_vervalue(is);
+        ret.value = expect_vervalue(is);
         expect_newline(is);
         ptran.commit();
+
+        std::cout << "Version read: " << ret << std::endl;
+        return ret;
 }
-bool read_version(std::istream &is) {
+optional<Version> read_version(std::istream &is) {
         CALLSTACK;
         try {
-                expect_version(is);
-                return true;
+                return expect_version(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //       verparam   = *(";" other-param)
-void expect_verparam(std::istream &is) {
+std::vector<OtherParam> expect_verparam(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while(read_token(is, ";"))
-                expect_other_param(is);
+        std::vector<OtherParam> ret;
+        while(read_token(is, ";")) {
+                ret.push_back(expect_other_param(is));
+        }
         ptran.commit();
+        return ret;
 }
 
 //       vervalue   = "2.0"         ;This memo
@@ -1644,9 +762,9 @@ void expect_verparam(std::istream &is) {
 //
 //       maxver     = <A IANA-registered iCalendar version identifier>
 //       ;Maximum iCalendar version needed to parse the iCalendar object.
-void expect_vervalue(std::istream &is) {
+string expect_vervalue(std::istream &is) {
         CALLSTACK;
-        expect_text(is);
+        return expect_text(is);
 }
 
 //       calscale   = "CALSCALE" calparam ":" calvalue CRLF
@@ -1746,34 +864,52 @@ bool read_x_prop(std::istream &is) {
 
 //     x-name        = "X-" [vendorid "-"] 1*(ALPHA / DIGIT / "-")
 //     ; Reserved for experimental use.
-void expect_x_name(std::istream &is) {
+string expect_x_name(std::istream &is) {
         CALLSTACK;
         save_input_pos ts(is);
 
+        string ret;
+
         // "X-"
-        if (!read_token(is, "X-"))
+        if (auto val = read_token(is, "X-")) {
+                ret += *val;
+        } else {
                 throw syntax_error(is.tellg());
+        }
 
         // [vendorid "-"]
-        if (read_vendorid(is)) {
-                expect_token(is, "-");
+        if (auto val = read_vendorid(is)) {
+                ret += val;
+                ret += expect_token(is, "-");
         }
 
         // 1*(ALPHA / DIGIT / "-")
-        if (!read_alnum(is) && !read_token(is, "-"))
+        if (auto v = read_alnum(is)) {
+                ret += *v;
+        } else if (auto v = read_token(is, "-")) {
+                ret += *v;
+        } else {
                 throw syntax_error(is.tellg());
-        while (read_alnum(is) || read_token(is, "-")) {
+        }
+        while (true) {
+                if (auto v = read_alnum(is)) {
+                        ret += *v;
+                } else if (auto v = read_token(is, "-")) {
+                        ret += *v;
+                } else {
+                        break;
+                }
         }
 
         ts.commit();
+        return ret;
 }
-bool read_x_name(std::istream &is) {
+optional<string> read_x_name(std::istream &is) {
         CALLSTACK;
         try {
-                expect_x_name(is);
-                return true;
+                return expect_x_name(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
@@ -1801,12 +937,14 @@ bool read_iana_prop(std::istream &is) {
 }
 
 //       pidparam   = *(";" other-param)
-void expect_pidparam(std::istream &is) {
+std::vector<OtherParam> expect_pidparam(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        std::vector<OtherParam> ret;
         while (read_token(is, ";"))
-                expect_other_param(is);
+                ret.push_back(expect_other_param(is));
         ptran.commit();
+        return ret;
 }
 
 //     other-param   = (iana-param / x-param)
@@ -1814,7 +952,7 @@ void expect_pidparam(std::istream &is) {
 //     ; Some other IANA-registered iCalendar parameter.
 //     x-param     = x-name "=" param-value *("," param-value)
 //     ; A non-standard, experimental parameter.
-void expect_other_param(std::istream &is) {
+OtherParam expect_other_param(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -1822,35 +960,41 @@ void expect_other_param(std::istream &is) {
 //       pidvalue   = text
 //       ;Any text that describes the product and version
 //       ;and that is generally assured of being unique.
-void expect_pidvalue(std::istream &is) {
+string expect_pidvalue(std::istream &is) {
         CALLSTACK;
-        expect_text(is);
+        return expect_text(is);
 }
 
 
 //       ESCAPED-CHAR = ("\\" / "\;" / "\," / "\N" / "\n")
 //          ; \\ encodes \, \N or \n encodes newline
 //          ; \; encodes ;, \, encodes ,
-bool read_escaped_char(std::istream &is) {
+optional<string> read_escaped_char(std::istream &is) {
         CALLSTACK;
-        return read_token(is, "\\\\")
-               || read_token(is, "\\;")
-               || read_token(is, "\\,")
-               || read_token(is, "\\N")
-               || read_token(is, "\\n");
+        if (auto val = read_token(is, "\\\\"))
+                return val;
+        if (auto val = read_token(is, "\\;"))
+                return val;
+        if (auto val = read_token(is, "\\,"))
+                return val;
+        if (auto val = read_token(is, "\\N"))
+                return val;
+        if (auto val = read_token(is, "\\n"))
+                return val;
+        return nullopt;
 }
 
 //       TSAFE-CHAR = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-5B /
 //                    %x5D-7E / NON-US-ASCII
 //          ; Any character except CONTROLs not needed by the current
 //          ; character set, DQUOTE, ";", ":", "\", ","
-bool read_tsafe_char(std::istream &is) {
+optional<string> read_tsafe_char(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
-        if (read_wsp(is)) {
+        if (auto c = read_wsp(is)) {
                 ptran.commit();
-                return true;
+                return c;
         }
         const auto i = is.get();
         switch(i) {
@@ -1953,49 +1097,52 @@ bool read_tsafe_char(std::istream &is) {
         case '}':
         case '~':
                 ptran.commit();
-                return true;
+                return string() + (char)i;
         }
 
         // NON-US-ASCII
         //std::cerr << "todo: non-us-ascii" << std::endl;
-        return false;
+        return nullopt;
 }
 
 
 //       text       = *(TSAFE-CHAR / ":" / DQUOTE / ESCAPED-CHAR)
 //          ; Folded according to description above
 //
-bool read_text_char(std::istream &is) {
+optional<string> read_text_char(std::istream &is) {
         CALLSTACK;
-        return read_tsafe_char(is)
-               || read_token(is, ":")
-               || read_dquote(is)
-               || read_escaped_char(is);
+        if (auto val = read_tsafe_char(is)) return val;
+        if (auto val = read_token(is, ":")) return val;
+        if (auto val = read_dquote(is)) return val;
+        if (auto val = read_escaped_char(is)) return val;
+        return nullopt;
 }
-void expect_text(std::istream &is) {
+string expect_text(std::istream &is) {
         CALLSTACK;
-        while(read_text_char(is)) {
+        string ret;
+        while(auto c = read_text_char(is)) {
+                ret += *c;
         }
+        return ret;
 }
 
 // DQUOTE: ASCII 22
-bool read_dquote(std::istream &is) {
+optional<string> read_dquote(std::istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto c = is.get();
         if (c != 22)
-                return false;
+                return nullopt;
         ptran.commit();
-        return true;
+        return string() + (char)22;
 }
 
-bool read_text(std::istream &is) {
+optional<string> read_text(std::istream &is) {
         CALLSTACK;
         try {
-                expect_text(is);
-                return true;
+                return expect_text(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
@@ -5399,14 +4546,15 @@ bool read_sentbyparam(std::istream &is) {
 }
 
 //       tzidprefix = "/"
-bool read_tzidprefix(std::istream &is) {
+optional<string> read_tzidprefix(std::istream &is) {
         CALLSTACK;
         return read_token(is, "/");
 }
-bool read_optional_tzidprefix(std::istream &is) {
+optional<string> read_optional_tzidprefix(std::istream &is) {
         CALLSTACK;
-        read_tzidprefix(is);
-        return true;
+        if (auto val = read_tzidprefix(is))
+                return val;
+        return "";
 }
 
 //       tzidparam  = "TZID" "=" [tzidprefix] paramtext

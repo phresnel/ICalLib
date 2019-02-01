@@ -7,7 +7,17 @@ add_executable(
         supercal
         src/main.cc
 
-        include/parser.hh src/parser.cc
+        include/ical.hh
+        src/ical.cc
+
+        include/parser.hh
+        src/parser.cc
+
+        include/parser_helpers.hh
+        src/parser_helpers.cc
+
+        include/rfc3986.hh
+        src/rfc3986.cc
 )
 
 include_directories(include/)

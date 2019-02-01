@@ -5,8 +5,12 @@
 #include <string>
 #include <string>
 #include <optional>
+#include <iosfwd>
+
 
 using std::string;
+using std::string;
+using std::vector;
 using std::optional;
 using std::nullopt;
 
@@ -23,6 +27,7 @@ struct Version {
         std::string value; // TODO: this is currently just a hack
 };
 
+
 struct CalProps {
         // required, once :
         ProdId prodId;
@@ -37,8 +42,12 @@ struct CalProps {
         //  iana-prop
 };
 
-struct ICalendar {
-
+struct Calendar {
 };
+
+std::ostream& operator<<(std::ostream& os, ProdId const&);
+std::ostream& operator<<(std::ostream& os, Version const&);
+std::ostream& operator<<(std::ostream& os, CalProps const&);
+std::ostream& operator<<(std::ostream& os, Calendar const&);
 
 #endif //ICAL_HH_INCLUDED_20190130
