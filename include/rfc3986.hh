@@ -1,11 +1,13 @@
 #ifndef RFC3986_HH_INCLUDED_20190201
 #define RFC3986_HH_INCLUDED_20190201
 
+// -- URI (RFC 3986) Parser Helpers. ------------------------------------
+// [RFC 3986](https://tools.ietf.org/html/rfc3986)
+
 #include <iosfwd>
 #include <string>
 #include <optional>
 
-// -- URI (RFC 3986) Parser Helpers. ------------------------------------
 
 inline namespace rfc3986 {
 

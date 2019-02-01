@@ -6,140 +6,12 @@
 #include <optional>
 #include <iostream>
 #include "rfc3986.hh"
+#include "rfc4288.hh"
+#include "rfc5234.hh"
+#include "rfc5646.hh"
 #include "parser_helpers.hh"
 
-// -- Media Type (RFC 4288) Parser Helpers. ------------------------------------
-inline namespace rfc4288 {
-//       type-name = reg-name
-bool read_type_name(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-}
 
-//       subtype-name = reg-name
-bool read_subtype_name(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-}
-
-//       reg-name = 1*127reg-name-chars
-bool read_reg_name(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-}
-
-//       reg-name-chars = ALPHA / DIGIT / "!" /
-//                       "#" / "$" / "&" / "." /
-//                       "+" / "-" / "^" / "_"
-bool read_reg_name_char(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-}
-}
-
-// -- Tags for Identifying Languages (RFC 5646) Parser Helpers. ----------------
-inline namespace rfc5646 {
-// alphanum      = (ALPHA / DIGIT)     ; letters and numbers
-
-// regular       = "art-lojban"        ; these tags match the 'langtag'
-//               / "cel-gaulish"       ; production, but their subtags
-//               / "no-bok"            ; are not extended language
-//               / "no-nyn"            ; or variant subtags: their meaning
-//               / "zh-guoyu"          ; is defined by their registration
-//               / "zh-hakka"          ; and all of these are deprecated
-//               / "zh-min"            ; in favor of a more modern
-//               / "zh-min-nan"        ; subtag or sequence of subtags
-//               / "zh-xiang"
-
-// irregular     = "en-GB-oed"         ; irregular tags do not match
-//               / "i-ami"             ; the 'langtag' production and
-//               / "i-bnn"             ; would not otherwise be
-//               / "i-default"         ; considered 'well-formed'
-//               / "i-enochian"        ; These tags are all valid,
-//               / "i-hak"             ; but most are deprecated
-//               / "i-klingon"         ; in favor of more modern
-//               / "i-lux"             ; subtags or subtag
-//               / "i-mingo"           ; combination
-//               / "i-navajo"
-//               / "i-pwn"
-//               / "i-tao"
-//               / "i-tay"
-//               / "i-tsu"
-//               / "sgn-BE-FR"
-//               / "sgn-BE-NL"
-//               / "sgn-CH-DE"
-
-// grandfathered = irregular           ; non-redundant tags registered
-//               / regular             ; during the RFC 3066 era
-
-// privateuse    = "x" 1*("-" (1*8alphanum))
-
-//                                     ; Single alphanumerics
-//                                     ; "x" reserved for private use
-// singleton     = DIGIT               ; 0 - 9
-//               / %x41-57             ; A - W
-//               / %x59-5A             ; Y - Z
-//               / %x61-77             ; a - w
-//               / %x79-7A             ; y - z
-
-// extension     = singleton 1*("-" (2*8alphanum))
-
-// variant       = 5*8alphanum         ; registered variants
-//               / (DIGIT 3alphanum)
-
-// region        = 2ALPHA              ; ISO 3166-1 code
-//               / 3DIGIT              ; UN M.49 code
-
-// script        = 4ALPHA              ; ISO 15924 code
-
-// extlang       = 3ALPHA              ; selected ISO 639 codes
-//                 *2("-" 3ALPHA)      ; permanently reserved
-
-// language      = 2*3ALPHA            ; shortest ISO 639 code
-//                 ["-" extlang]       ; sometimes followed by
-//                                     ; extended language subtags
-//               / 4ALPHA              ; or reserved for future use
-//               / 5*8ALPHA            ; or registered language subtag
-
-//  langtag       = language
-//                 ["-" script]
-//                 ["-" region]
-//                 *("-" variant)
-//                 *("-" extension)
-//                 ["-" privateuse]
-
-//  Language-Tag  = langtag             ; normal language tags
-//               / privateuse          ; private use tag
-//               / grandfathered       ; grandfathered tags
-bool read_language_tag(std::istream &is) {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-}
-}
-
-// -- ABNF (RFC 5234) Parser Helpers. ------------------------------------------
-inline namespace rfc5234 {
-optional<string> read_htab(std::istream &is) {
-        CALLSTACK;
-        // HTAB = %x09
-        return read_token(is, "\t");
-}
-
-optional<string> read_sp(std::istream &is) {
-        CALLSTACK;
-        // SP = %x20
-        return read_token(is, " ");
-}
-
-optional<string> read_wsp(std::istream &is) {
-        CALLSTACK;
-        // WSP = SP / HTAB ; white space
-        if (auto val = read_sp(is))
-                return val;
-        if (auto val = read_htab(is))
-                return val;
-        return nullopt;
-}
 
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
 void expect_key_value(std::istream &is, string const &k, string const &v) {
@@ -198,7 +70,6 @@ bool read_key_value(std::istream &is, string const &k, string const &v) {
 //     ; described above.  When generating a content line, lines
 //     ; longer than 75 octets SHOULD be folded according to
 //     ; the folding procedure described above.
-}
 
 //    contentline   = name *(";" param ) ":" value CRLF
 void expect_contentline(std::istream &is) {
