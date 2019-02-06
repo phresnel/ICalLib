@@ -73,7 +73,7 @@ inline namespace rfc5646 {
 //  Language-Tag  = langtag             ; normal language tags
 //               / privateuse          ; private use tag
 //               / grandfathered       ; grandfathered tags
-bool read_language_tag(std::istream &is) {
+optional<string> read_language_tag(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }

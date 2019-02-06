@@ -4,19 +4,19 @@
 inline namespace rfc4288 {
 
 //       type-name = reg-name
-bool read_type_name(std::istream &is) {
+optional<string> read_type_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       subtype-name = reg-name
-bool read_subtype_name(std::istream &is) {
+optional<string> read_subtype_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       reg-name = 1*127reg-name-chars
-bool read_reg_name(std::istream &is) {
+optional<string> read_reg_name(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -24,7 +24,7 @@ bool read_reg_name(std::istream &is) {
 //       reg-name-chars = ALPHA / DIGIT / "!" /
 //                       "#" / "$" / "&" / "." /
 //                       "+" / "-" / "^" / "_"
-bool read_reg_name_char(std::istream &is) {
+optional<string> read_reg_name_char(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }

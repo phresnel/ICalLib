@@ -16,17 +16,21 @@ using std::nullopt;
 using std::tuple;
 using std::make_tuple;
 
-struct OtherParam {
-};
+struct having_string_name { string name; };
+struct having_string_value { string value; };
+template <typename T> struct having_value { T value; };
+struct having_string_values { vector<string> values; };
 
-struct Param {
+struct XParam {};
+struct IanaParam {};
+using OtherParam = variant<XParam, IanaParam>;
+
+struct Param : having_string_name, having_string_values {
         string name;
-        vector<string> values;
 };
 
-struct ProdId {
+struct ProdId : having_string_value {
         vector<OtherParam> params;
-        string value;
 };
 
 struct Version {
@@ -34,10 +38,11 @@ struct Version {
         string value; // TODO: this is currently just a hack
 };
 
-struct ContentLine {
-        string name;
+struct ContentLine :
+        having_string_name,
+        having_string_value
+{
         vector<Param> params;
-        string value;
 };
 
 struct Alarm {
@@ -58,6 +63,54 @@ struct CalProps {
         //  iana-prop
 };
 
+struct PartStatEvent : having_string_value {};
+struct PartStatTodo : having_string_value {};
+struct PartStatJour: having_string_value {};
+using PartStatParam = variant<PartStatEvent, PartStatTodo, PartStatJour>;
+
+struct AltRepParam : having_string_value {};
+struct CnParam : having_string_value {};
+struct CuTypeParam : having_string_value {};
+struct DelFromParam : having_string_values {};
+struct DelToParam : having_string_values  {};
+struct DirParam : having_string_value {};
+struct EncodingParam : having_string_value {};
+struct FmtTypeParam : having_string_value {};
+struct FbTypeParam : having_string_value {};
+struct LanguageParam : having_string_value {};
+struct MemberParam : having_string_values {};
+struct RangeParam : having_string_value {};
+struct TrigRelParam : having_string_value {};
+struct RelTypeParam : having_string_value {};
+struct RoleParam : having_string_value {};
+struct RsvpParam : having_string_value {};
+struct SentByParam : having_string_value {};
+struct TzIdParam : having_string_value {};
+
+struct ValueType : having_string_value {};
+struct ValueTypeParam : having_value<ValueType> {};
+
+using ICalParameter = variant<AltRepParam,
+                              CnParam,
+                              CuTypeParam,
+                              DelFromParam,
+                              DelToParam,
+                              DirParam,
+                              EncodingParam,
+                              FmtTypeParam,
+                              FbTypeParam,
+                              LanguageParam,
+                              MemberParam,
+                              PartStatParam,
+                              RangeParam,
+                              TrigRelParam,
+                              RelTypeParam,
+                              RoleParam,
+                              RsvpParam,
+                              SentByParam,
+                              TzIdParam,
+                              ValueTypeParam,
+                              OtherParam>;
 
 struct DtStamp {};
 struct Uid {};
@@ -89,7 +142,11 @@ struct RStatus {};
 struct Related {};
 struct Resources {};
 struct RDate {};
-struct XProp {};
+struct XProp {
+        string name;
+        vector<ICalParameter> parameters;
+        string value;
+};
 struct IanaProp {};
 
 using EventProp = variant<DtStamp,
