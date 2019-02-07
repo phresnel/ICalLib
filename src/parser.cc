@@ -2064,33 +2064,47 @@ optional<Created> read_created(istream &is) {
 //                   (";" other-param)
 //                   ;
 //                   )
-bool read_descparam(istream &is) {
+optional<DescParams> read_descparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
-                if (!(read_altrepparam(is) ||
-                      read_languageparam(is) ||
-                      read_other_param(is)))
-                        return false;
+        DescParams ret;
+        while(read_token(is, ";")) {
+                if (auto v = read_altrepparam(is)) {
+                        ret.alt_rep = *v;
+                } else if (auto v = read_languageparam(is)) {
+                        ret.language = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        std::cerr << " unknown" << std::endl;
+                        // TODO: warn
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       description = "DESCRIPTION" descparam ":" text CRLF
 optional<Description> read_description(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "DESCRIPTION") &&
-                read_descparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
-        if (!success)
+        Description ret;
+        if (!read_token(is, "DESCRIPTION"))
                 return nullopt;
+
+        if (auto v = read_descparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_text(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
+
 //       geovalue   = float ";" float
 //       ;Latitude and Longitude components
 optional<GeoValue> read_geovalue(istream &is) {

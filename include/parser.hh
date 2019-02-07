@@ -148,7 +148,7 @@ bool read_classparam(istream &is);
 optional<Class> read_class(istream &is);
 bool read_creaparam(istream &is);
 optional<Created> read_created(istream &is);
-bool read_descparam(istream &is);
+optional<DescParams> read_descparam(istream &is);
 optional<Description> read_description(istream &is);
 optional<GeoValue> read_geovalue(istream &is);
 optional<GeoParams> read_geoparam(istream &is);

@@ -144,7 +144,13 @@ struct Uid : having_string_value,  having_other_params {};
 struct DtStart {};
 struct Class {};
 struct Created {};
-struct Description {};
+struct DescParams : having_other_params {
+        optional<AltRepParam> alt_rep;
+        optional<LanguageParam> language;
+};
+struct Description : having_string_value {
+        DescParams params;
+};
 struct GeoParams : having_other_params {};
 struct GeoValue {
         string latitude;
