@@ -8,46 +8,65 @@
 #include <variant>
 #include <vector>
 
+// string
 using std::string;
-using std::variant;
+
+// containers
 using std::vector;
+
+// optional
 using std::optional;
 using std::nullopt;
+
+// tuple
 using std::tuple;
 using std::make_tuple;
 
+// variant related
+using std::variant;
+using std::holds_alternative;
+using std::get;
+using std::get_if;
+
+template<typename T, typename ...VTypes>
+inline
+optional<T> get_opt(std::variant<VTypes...> const &v) {
+        auto p = get_if<T>(&v);
+        if (!p) return nullopt;
+        return *p;
+}
+
+// mixins
 struct having_string_name { string name; };
 struct having_string_value { string value; };
 template <typename T> struct having_value { T value; };
 struct having_string_values { vector<string> values; };
 
+// ICalendar types
 struct XParam {};
 struct IanaParam {};
 using OtherParam = variant<XParam, IanaParam>;
 
-struct Param : having_string_name, having_string_values {
-        string name;
-};
+struct Param : having_string_name, having_string_values {};
+
+struct having_other_params {  std::vector<OtherParam> params; };
+struct having_params { std::vector<Param> params; };
 
 struct ProdId : having_string_value {
         vector<OtherParam> params;
 };
 
-struct Version {
-        vector<OtherParam> params;
-        string value; // TODO: this is currently just a hack
+struct Version : having_other_params, having_string_value {
+        // TODO: this is currently just a hack
 };
 
-struct ContentLine :
-        having_string_name,
-        having_string_value
-{
-        vector<Param> params;
-};
+struct ContentLine :  having_string_name, having_string_value, having_params {};
 
 struct Alarm {
 };
 
+struct CalScale :  having_string_value, having_other_params { };
+struct Method : having_other_params, having_string_value  {};
 
 struct CalProps {
         // required, once :
@@ -55,8 +74,8 @@ struct CalProps {
         Version version;
 
         // optional, once :
-        //  calscale
-        //  method
+        optional<CalScale> calScale;
+        optional<Method> method;
 
         // optional, multiple :
         //  x-prop
@@ -142,10 +161,11 @@ struct RStatus {};
 struct Related {};
 struct Resources {};
 struct RDate {};
-struct XProp {
-        string name;
-        vector<ICalParameter> parameters;
-        string value;
+struct XProp :
+        having_string_name,
+        having_string_value
+{
+        vector<ICalParameter> params;
 };
 struct IanaProp {};
 
@@ -205,11 +225,19 @@ struct Calendar {
         vector<Component> components;
 };
 
-std::ostream& operator<<(std::ostream& os, ProdId const&);
-std::ostream& operator<<(std::ostream& os, Version const&);
-std::ostream& operator<<(std::ostream& os, ContentLine const&);
-std::ostream& operator<<(std::ostream& os, Param const&);
-std::ostream& operator<<(std::ostream& os, CalProps const&);
-std::ostream& operator<<(std::ostream& os, Calendar const&);
+std::ostream& operator<<(std::ostream& os, ProdId const &);
+std::ostream& operator<<(std::ostream& os, Version const &);
+std::ostream& operator<<(std::ostream& os, ContentLine const &);
+std::ostream& operator<<(std::ostream& os, Param const &);
+
+std::ostream& operator<<(std::ostream& os, Component const &);
+std::ostream& operator<<(std::ostream& os, std::vector<Component> const &);
+std::ostream& operator<<(std::ostream& os, CalProps const &);
+std::ostream& operator<<(std::ostream& os, Calendar const &);
+
+std::ostream& operator<<(std::ostream& os, CalScale const &);
+std::ostream& operator<<(std::ostream& os, Method const &);
+std::ostream& operator<<(std::ostream& os, XProp const &);
+std::ostream& operator<<(std::ostream& os, IanaProp const &);
 
 #endif //ICAL_HH_INCLUDED_20190130

@@ -3,6 +3,25 @@
 
 inline namespace parser_helpers {
 
+void dump_remainder(std::istream &is) {
+        std::istream::sentry se(is, true);
+        std::streambuf* sb = is.rdbuf();
+        save_input_pos ptran(is);
+
+        std::cerr << "remainder{";
+        while (true) {
+                auto i = sb->sgetc();
+                if (i == EOF) {
+                        std::cerr << "[EOF]}\n";
+                        break;
+                }
+                sb->sbumpc();
+                std::cerr << char(i);
+        }
+}
+
+CallStack callStack;
+
 void print_location(std::istream::pos_type pos, std::istream &is) {
         const auto where = pos;
         is.seekg(0);
@@ -13,7 +32,6 @@ void print_location(std::istream::pos_type pos, std::istream &is) {
                         ++line;
                 } else {
                         auto g = is.get();
-                        //std::cout << "[" << (char)g << "]";
                 }
         }
         std::cerr << " (while parsing line " << line << ":" << col << ")\n";
@@ -32,7 +50,7 @@ string expect_token(std::istream &is, string const &tok) {
                         throw unexpected_token(is.tellg(), tok);
                 }
                 if(i != c) {
-                        throw unexpected_token(is.tellg(), tok);
+                        throw syntax_error(is.tellg(), tok);
                 }
         }
         ptran.commit();
@@ -60,14 +78,25 @@ optional<string> read_eof(std::istream &is) {
 string expect_newline(std::istream &is) {
         CALLSTACK;
         // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
-        if (auto v = read_token(is, "\r\n"))
-                return *v;
-        if (auto v = read_token(is, "\n"))
-                return *v;
-        if (auto v = read_token(is, "\r"))
-                return *v;
-        if (auto v = read_eof(is))
-                return *v;
+
+        std::istream::sentry se(is, true);
+        std::streambuf* sb = is.rdbuf();
+
+        switch (sb->sgetc()) {
+        case '\n':
+                sb->sbumpc();
+                return "\n";
+        case '\r':
+                sb->sbumpc();
+                if (sb->sgetc() == '\n') {
+                        sb->sbumpc();
+                        return "\r\n";
+                }
+                return "\r";
+        case std::streambuf::traits_type::eof():
+                is.setstate(std::ios::eofbit);
+                return "";
+        };
         throw unexpected_token(is.tellg());
 }
 

@@ -3,9 +3,15 @@
 #include "parser_helpers.hh"
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
-int main() {
-        std::ifstream f("dev-assets/f1calendar.com/2019_full.ics");
+void read_file(std::string const &filename) {
+        std::ifstream f(filename, std::ifstream::binary);
+        if (!f.good()) {
+                std::cerr << "error opening \"" << filename << "\"\n";
+                return;
+        }
+        //std::stringstream ss; ss << f.rdbuf();
         try {
                 expect_ical(f);
                 std::cout << "done." << std::endl;
@@ -18,5 +24,10 @@ int main() {
         } catch (std::exception &e) {
                 std::cerr << "unknown error:" << e.what();
         }
+}
+
+int main() {
+        //read_file("dev-assets/f1calendar.com/2019_full.ics");
+        read_file("dev-assets/mini1.ics");
         return 0;
 }

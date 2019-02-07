@@ -6,7 +6,6 @@
 #include "parser.hh"
 #include "parser_helpers.hh"
 
-
 // -- Parser helpers specific to ICal, but generic within ICal. ----------------
 tuple<string, string> expect_key_value(
         istream &is,
@@ -20,8 +19,9 @@ tuple<string, string> expect_key_value(
                 read_token(is, ":") &&
                 read_token(is, v) &&
                 read_newline(is);
-        if (!success)
+        if (!success) {
                 throw key_value_pair_expected(is.tellg(), k, v);
+        }
         ptran.commit();
         return {k, v};
 }
@@ -84,8 +84,6 @@ ContentLine expect_contentline(istream &is) {
         ret.value = expect_value(is);
         expect_newline(is);
         ts.commit();
-
-        std::cout << ret << std::endl;
         return ret;
 }
 optional<ContentLine> read_contentline(istream &is) {
@@ -517,6 +515,7 @@ Calendar expect_ical(istream &is) {
         ret = expect_icalbody(is);
         expect_key_value(is, "END", "VCALENDAR");
         ptran.commit();
+        // TODO: The grammar says that there can be more than 1 icalobject.
         return ret;
 }
 
@@ -566,20 +565,29 @@ CalProps expect_calprops(istream &is) {
             versionc = 0,
             calscalec = 0,
             methodc = 0;
+
+        std::cerr << "reading callprops:\n";
         while (true) {
                 if (auto val = read_prodid(is)) {
+                        std::cerr << "  got prodid <<" << *val << ">>" << std::endl;
                         ret.prodId = *val;
                         ++prodidc;
-                } else if (read_version(is)) {
+                } else if (auto val = read_version(is)) {
+                        std::cerr << "  got version <<" << *val << ">>" << std::endl;
                         // ret.version = ...
                         ++versionc;
-                } else if (read_calscale(is)) {
+                } else if (auto val = read_calscale(is)) {
+                        std::cerr << "  got calscale <<" << *val << ">>" << std::endl;
                         ++calscalec;
-                } else if (read_method(is)) {
+                } else if (auto val = read_method(is)) {
+                        std::cerr << "  got method <<" << *val << ">>" << std::endl;
                         ++methodc;
-                } else if (read_x_prop(is)) {
-                } else if (read_iana_prop(is)) {
+                } else if (auto val = read_x_prop(is)) {
+                        std::cerr << "  got xprop <<" << *val << ">>" << std::endl;
+                } else if (auto val = read_iana_prop(is)) {
+                        std::cerr << "  got iana prop <<" << *val << ">>" << std::endl;
                 } else {
+                        std::cerr << "  end of calprop <<" << ">>" << std::endl;
                         break;
                 }
         }
@@ -620,8 +628,6 @@ Version expect_version(istream &is) {
         ret.value = expect_vervalue(is);
         expect_newline(is);
         ptran.commit();
-
-        std::cout << "Version read: " << ret << std::endl;
         return ret;
 }
 optional<Version> read_version(istream &is) {
@@ -660,75 +666,81 @@ string expect_vervalue(istream &is) {
 }
 
 //       calscale   = "CALSCALE" calparam ":" calvalue CRLF
-void expect_calscale(istream &is) {
+CalScale expect_calscale(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        CalScale ret;
         expect_token(is, "CALSCALE");
-        expect_calparam(is);
+        ret.params = expect_calparam(is);
         expect_token(is, ":");
-        expect_calvalue(is);
+        ret.value = expect_calvalue(is);
         expect_newline(is);
         ptran.commit();
+        return ret;
 }
-bool read_calscale(istream &is) {
+optional<CalScale> read_calscale(istream &is) {
         CALLSTACK;
         try {
-                expect_calscale(is);
-                return true;
+                return expect_calscale(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
 
 //       calparam   = *(";" other-param)
-void expect_calparam(istream &is) {
+vector<OtherParam> expect_calparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        vector<OtherParam> ret;
         while (read_token(is, ";"))
-                expect_other_param(is);
+                ret.push_back(expect_other_param(is));
         ptran.commit();
+        return ret;
 }
 
 //       calvalue   = "GREGORIAN"
-void expect_calvalue(istream &is) {
+string expect_calvalue(istream &is) {
         CALLSTACK;
-        expect_token(is, "GREGORIAN");
+        return expect_token(is, "GREGORIAN");
 }
 
 //       method     = "METHOD" metparam ":" metvalue CRLF
-bool read_method(istream &is) {
+optional<Method> read_method(istream &is) {
         CALLSTACK;
         try {
-                expect_method(is);
-                return true;
+                return expect_method(is);
         } catch (syntax_error &) {
-                return false;
+                return nullopt;
         }
 }
-void expect_method(istream &is) {
+Method expect_method(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        Method ret;
         expect_token(is, "METHOD");
-        expect_metparam(is);
+        ret.params = expect_metparam(is);
         expect_token(is, ":");
-        expect_metvalue(is);
+        ret.value = expect_metvalue(is);
         expect_newline(is);
         ptran.commit();
+        return ret;
 }
 
 //       metparam   = *(";" other-param)
-void expect_metparam(istream &is) {
+std::vector<OtherParam> expect_metparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        std::vector<OtherParam> ret;
         while (read_token(is, ";"))
-                expect_other_param(is);
+                ret.push_back(expect_other_param(is));
         ptran.commit();
+        return ret;
 }
 
 //       metvalue   = iana-token
-void expect_metvalue(istream &is) {
+string expect_metvalue(istream &is) {
         CALLSTACK;
-        expect_iana_token(is);
+        return expect_iana_token(is);
 }
 
 //       x-prop = x-name *(";" icalparameter) ":" value CRLF
@@ -738,7 +750,7 @@ XProp expect_x_prop(istream &is) {
         XProp ret;
         ret.name = expect_x_name(is);
         while (read_token(is, ";")) {
-                ret.parameters.push_back(expect_icalparameter(is));
+                ret.params.push_back(expect_icalparameter(is));
         }
         expect_token(is, ":");
         ret.value = expect_value(is);
@@ -3689,8 +3701,10 @@ optional<EventComp> read_eventc(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         EventComp ret;
-        if (read_key_value(is, "BEGIN", "VEVENT"))
+
+        if (!read_key_value(is, "BEGIN", "VEVENT")) {
                 return nullopt;
+        }
         if (auto v = read_eventprop(is)) {
                 ret.properties = *v;
         } else {

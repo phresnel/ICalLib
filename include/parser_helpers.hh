@@ -78,7 +78,7 @@ private:
         std::vector<const char*> entries_;
 };
 
-//CallStack callStack;
+//extern CallStack callStack;
 //#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
 //*/
 #define CALLSTACK
@@ -150,6 +150,8 @@ public:
 
         void commit() { s_ = nullptr; }
 };
+
+void dump_remainder(std::istream &is);
 
 // -- Parser Helpers. ----------------------------------------------------------
 string expect_token(std::istream &is, string const &tok);
