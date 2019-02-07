@@ -171,7 +171,13 @@ struct Organizer {
 struct Priority {};
 struct Seq {};
 struct Status {};
-struct Summary {};
+struct SummParams : having_other_params {
+        optional<AltRepParam> alt_rep;
+        optional<LanguageParam> language;
+};
+struct Summary : having_string_value {
+        SummParams params;
+};
 struct Transp {};
 struct Url {};
 struct RecurId {};

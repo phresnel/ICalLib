@@ -173,7 +173,7 @@ bool read_statvalue_event(istream &is);
 bool read_statparam(istream &is);
 optional<Status> read_status(istream &is);
 bool read_summparam_single(istream &is);
-bool read_summparam(istream &is);
+optional<SummParams> read_summparam(istream &is);
 optional<Summary> read_summary(istream &is);
 bool read_transparam(istream &is);
 bool read_transvalue(istream &is);

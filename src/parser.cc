@@ -2431,7 +2431,8 @@ optional<Status> read_status(istream &is) {
 //                  ; The following are OPTIONAL,
 //                  ; but MUST NOT occur more than once.
 //                  ;
-//                  (";" altrepparam) / (";" languageparam) /
+//                  (";" altrepparam) /
+//                  (";" languageparam) /
 //                  ;
 //                  ; The following is OPTIONAL,
 //                  ; and MAY occur more than once.
@@ -2439,43 +2440,46 @@ optional<Status> read_status(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_summparam_single(istream &is) {
+optional<SummParams> read_summparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, ";") && (
-                        read_altrepparam(is) ||
-                        read_languageparam(is) ||
-                        read_other_param(is)
-                );
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-bool read_summparam(istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        while (read_summparam_single(is)) {
+        SummParams ret;
+        while(read_token(is, ";")) {
+                if (auto v = read_altrepparam(is)) {
+                        ret.alt_rep = *v;
+                } else if (auto v = read_languageparam(is)) {
+                        ret.language = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        std::cerr << " unknown" << std::endl;
+                        // TODO: warn
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       summary    = "SUMMARY" summparam ":" text CRLF
 optional<Summary> read_summary(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "SUMMARY") &&
-                read_summparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
-        if (!success)
+        Summary ret;
+        if (!read_token(is, "SUMMARY"))
                 return nullopt;
+
+        if (auto v = read_summparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_text(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 
 //       transparam = *(";" other-param)
