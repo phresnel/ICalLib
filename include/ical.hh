@@ -129,6 +129,13 @@ using ICalParameter = variant<AltRepParam,
                               ValueTypeParam,
                               OtherParam>;
 
+struct OrgParams : having_other_params {
+        optional<CnParam> cn;
+        optional<DirParam> dir;
+        optional<SentByParam> sentBy;
+        optional<LanguageParam> language;
+};
+
 struct DtStamp {};
 struct Uid : having_string_value,  having_other_params {};
 struct DtStart {};
@@ -138,7 +145,11 @@ struct Description {};
 struct Geo {};
 struct LastMod {};
 struct Location {};
-struct Organizer {};
+
+struct Organizer {
+        OrgParams params;
+        string address;
+};
 struct Priority {};
 struct Seq {};
 struct Status {};

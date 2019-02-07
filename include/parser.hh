@@ -158,7 +158,7 @@ optional<LastMod> read_last_mod(istream &is);
 bool read_locparam_single(istream &is);
 bool read_locparam(istream &is);
 optional<Location> read_location(istream &is);
-bool read_orgparam(istream &is);
+optional<OrgParams> read_orgparam(istream &is);
 optional<string> read_cal_address(istream &is);
 optional<Organizer> read_organizer(istream &is);
 bool read_priovalue(istream &is);

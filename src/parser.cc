@@ -566,28 +566,20 @@ CalProps expect_calprops(istream &is) {
             calscalec = 0,
             methodc = 0;
 
-        std::cerr << "reading callprops:\n";
         while (true) {
                 if (auto val = read_prodid(is)) {
-                        std::cerr << "  got prodid <<" << *val << ">>" << std::endl;
                         ret.prodId = *val;
                         ++prodidc;
                 } else if (auto val = read_version(is)) {
-                        std::cerr << "  got version <<" << *val << ">>" << std::endl;
                         // ret.version = ...
                         ++versionc;
                 } else if (auto val = read_calscale(is)) {
-                        std::cerr << "  got calscale <<" << *val << ">>" << std::endl;
                         ++calscalec;
                 } else if (auto val = read_method(is)) {
-                        std::cerr << "  got method <<" << *val << ">>" << std::endl;
                         ++methodc;
                 } else if (auto val = read_x_prop(is)) {
-                        std::cerr << "  got xprop <<" << *val << ">>" << std::endl;
                 } else if (auto val = read_iana_prop(is)) {
-                        std::cerr << "  got iana prop <<" << *val << ">>" << std::endl;
                 } else {
-                        std::cerr << "  end of calprop <<" << ">>" << std::endl;
                         break;
                 }
         }
@@ -2103,9 +2095,26 @@ optional<Location> read_location(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_orgparam(istream &is) {
+optional<OrgParams> read_orgparam(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        OrgParams ret;
+        while(true) {
+                if (auto v = read_cnparam(is)) {
+                        ret.cn = *v;
+                } else if (auto v = read_dirparam(is)) {
+                        ret.dir = *v;
+                } else if (auto v = read_sentbyparam(is)) {
+                        ret.sentBy = *v;
+                } else if (auto v = read_languageparam(is)) {
+                        ret.language = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        break;
+                }
+        }
+        return ret;
 }
 optional<string> read_cal_address(istream &is) {
         CALLSTACK;
@@ -2115,16 +2124,31 @@ optional<string> read_cal_address(istream &is) {
 optional<Organizer> read_organizer(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "ORGANIZER") &&
-                read_orgparam(is) &&
-                read_token(is, ":") &&
-                read_cal_address(is) &&
-                read_newline(is);
-        if (!success)
+        Organizer ret;
+
+        if (!read_token(is, "ORGANIZER"))
                 return nullopt;
+
+        if (auto v = read_orgparam(is)) {
+                ret.params = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_token(is, ":"))
+                return nullopt;
+
+        if (auto v = read_cal_address(is)) {
+                ret.address = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_newline(is))
+                return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 
 //       priovalue   = integer       ;Must be in the range [0..9]
