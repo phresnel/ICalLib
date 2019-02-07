@@ -1170,30 +1170,37 @@ bool read_binary(istream &is) {
 }
 
 //       float      = (["+"] / "-") 1*DIGIT ["." 1*DIGIT]
-bool read_float(istream &is) {
+optional<string> read_float(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        string ret;
 
         // (["+"] / "-")
-        if (!read_token(is, "+"))
-                read_token(is, "-");
+        if (auto v = read_token(is, "+")) ret += *v;
+        else if (auto v = read_token(is, "-")) ret += *v;
 
         // 1*DIGIT
-        if (!read_digit(is))
-                return false;
-        while (read_digit(is)) {
+        if (auto v = read_digit(is)) ret += *v;
+        else return nullopt;
+
+        while (auto v = read_digit(is)) {
+                ret += *v;
         }
 
         // ["." 1*DIGIT]
-        if (read_token(is, ".")) {
-                if (!read_digit(is))
-                        return false;
-                while (read_digit(is)) {
+        if (auto dot = read_token(is, ".")) {
+                ret += *dot;
+
+                if (auto v = read_digit(is)) ret += *v;
+                else return nullopt;
+
+                while (auto v = read_digit(is)) {
+                        ret += *v;
                 }
         }
 
         ptran.commit();
-        return true;
+        return ret;
 }
 //       integer    = (["+"] / "-") 1*DIGIT
 bool read_integer(istream &is) {
@@ -2086,43 +2093,53 @@ optional<Description> read_description(istream &is) {
 }
 //       geovalue   = float ";" float
 //       ;Latitude and Longitude components
-bool read_geovalue(istream &is) {
+optional<GeoValue> read_geovalue(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto match =
-                read_float(is) &&
-                read_token(is, ";") &&
-                read_float(is);
-        if (!match)
-                return false;
+        GeoValue ret;
+        if (auto v = read_float(is)) ret.latitude = *v;
+        else return nullopt;
+
+        if (!read_token(is, ";")) return nullopt;
+
+        if (auto v = read_float(is)) ret.longitude = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 //       geoparam   = *(";" other-param)
-bool read_geoparam(istream &is) {
+optional<GeoParams> read_geoparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        GeoParams ret;
         while (read_token(is, ";")) {
-                if (!read_other_param(is))
-                        return false;
+                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+                else return nullopt;
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       geo        = "GEO" geoparam ":" geovalue CRLF
 optional<Geo> read_geo(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "GEO") &&
-                read_geoparam(is) &&
-                read_token(is, ":") &&
-                read_geovalue(is) &&
-                read_newline(is);
-        if (!success)
-                return nullopt;
+        Geo ret;
+
+        if (!read_token(is, "GEO")) return nullopt;
+
+        if (auto v = read_geoparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_geovalue(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 //       lstparam   = *(";" other-param)
 bool read_lstparam(istream &is) {

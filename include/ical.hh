@@ -145,7 +145,15 @@ struct DtStart {};
 struct Class {};
 struct Created {};
 struct Description {};
-struct Geo {};
+struct GeoParams : having_other_params {};
+struct GeoValue {
+        string latitude;
+        string longitude;
+};
+struct Geo {
+        GeoParams params;
+        GeoValue value;
+};
 struct LastMod {};
 
 struct LocParams : having_other_params {
