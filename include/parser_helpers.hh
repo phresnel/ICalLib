@@ -78,9 +78,11 @@ private:
         std::vector<const char*> entries_;
 };
 
-//extern CallStack callStack;
-//#define CALLSTACK CallStack::Entry call_stack_entry_##__LINE__ = callStack.push(__func__);
-//*/
+extern CallStack callStack;
+
+//#define CALLSTACK \
+        CallStack::Entry \
+                call_stack_entry_##__LINE__ = callStack.push(__func__);
 #define CALLSTACK
 
 class not_implemented : public std::runtime_error {
@@ -99,7 +101,11 @@ public:
 
         std::istream::pos_type pos = 0;
 };
-#define NOT_IMPLEMENTED do{throw not_implemented(is.tellg(), __func__, __FILE__, __LINE__);}while(false)
+#define NOT_IMPLEMENTED \
+        do{ \
+                throw not_implemented( \
+                        is.tellg(), __func__, __FILE__, __LINE__); \
+        }while(false)
 
 void print_location(std::istream::pos_type pos, std::istream &is);
 
