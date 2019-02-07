@@ -1995,37 +1995,50 @@ optional<DtStart> read_dtstart(istream &is) {
 //       classvalue = "PUBLIC" / "PRIVATE" / "CONFIDENTIAL" / iana-token
 //                  / x-name
 //       ;Default is PUBLIC
-bool read_classvalue(istream &is) {
+optional<string> read_classvalue(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        ptran.commit();
-        return true;
+        if (auto v = read_token(is, "PUBLIC")) return v;
+        if (auto v = read_token(is, "PRIVATE")) return v;
+        if (auto v = read_token(is, "CONFIDENTIAL")) return v;
+        if (auto v = read_iana_token(is)) return v;
+        if (auto v = read_x_name(is)) return v;
+        else return nullopt;
 }
 
 //       classparam = *(";" other-param)
-bool read_classparam(istream &is) {
+optional<ClassParams> read_classparam(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        ClassParams ret;
+
+        while (read_token(is, ";")) {
+                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+                else return nullopt;
+        }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       class      = "CLASS" classparam ":" classvalue CRLF
 optional<Class> read_class(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "CLASS") &&
-                read_classparam(is) &&
-                read_token(is, ":") &&
-                read_classvalue(is) &&
-                read_newline(is);
-        if (!success)
-                return nullopt;
+        Class ret;
+
+        if (!read_token(is, "CLASS")) return nullopt;
+
+        if (auto v = read_classparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_classvalue(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 //       creaparam  = *(";" other-param)
 bool read_creaparam(istream &is) {

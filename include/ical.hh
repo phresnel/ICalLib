@@ -142,7 +142,10 @@ struct OrgParams : having_other_params {
 struct DtStamp {};
 struct Uid : having_string_value,  having_other_params {};
 struct DtStart {};
-struct Class {};
+struct ClassParams : having_other_params {};
+struct Class : having_string_value {
+        ClassParams params;
+};
 struct Created {};
 struct DescParams : having_other_params {
         optional<AltRepParam> alt_rep;
