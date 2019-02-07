@@ -4670,7 +4670,28 @@ optional<ValueTypeParam> read_valuetypeparam(istream &is) {
 //     ; Some other IANA-registered iCalendar parameter.
 optional<IanaParam> read_iana_param(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        IanaParam ret;
+
+        if (auto v = read_iana_token(is)) {
+                ret.token = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_token(is, "="))
+                return nullopt;
+
+        do {
+                if (auto v = read_param_value(is)) {
+                        ret.values.push_back(*v);
+                } else {
+                        return nullopt;
+                }
+        } while (read_token(is, ","));
+
+        ptran.commit();
+        return ret;
 }
 
 //     x-param     = x-name "=" param-value *("," param-value)

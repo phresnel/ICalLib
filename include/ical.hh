@@ -44,7 +44,10 @@ struct having_string_values { vector<string> values; };
 
 // ICalendar types
 struct XParam {};
-struct IanaParam {};
+struct IanaParam {
+        string token;
+        vector<string> values;
+};
 using OtherParam = variant<XParam, IanaParam>;
 
 struct Param : having_string_name, having_string_values {};
