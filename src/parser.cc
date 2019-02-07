@@ -2153,7 +2153,8 @@ optional<LastMod> read_last_mod(istream &is) {
 //                  ; The following are OPTIONAL,
 //                  ; but MUST NOT occur more than once.
 //                  ;
-//                  (";" altrepparam) / (";" languageparam) /
+//                  (";" altrepparam) /
+//                  (";" languageparam) /
 //                  ;
 //                  ; The following is OPTIONAL,
 //                  ; and MAY occur more than once.
@@ -2161,42 +2162,45 @@ optional<LastMod> read_last_mod(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_locparam_single(istream &is) {
+optional<LocParams> read_locparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, ";") && (
-                        read_altrepparam(is) ||
-                        read_languageparam(is) ||
-                        read_other_param(is)
-                );
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-bool read_locparam(istream &is) {
-        CALLSTACK;
-        save_input_pos ptran(is);
-        while (read_locparam_single(is)) {
+        LocParams ret;
+        while(read_token(is, ";")) {
+                if (auto v = read_altrepparam(is)) {
+                        ret.alt_rep = *v;
+                } else if (auto v = read_languageparam(is)) {
+                        ret.language = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        std::cerr << " unknown" << std::endl;
+                        // TODO: warn
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       location   = "LOCATION"  locparam ":" text CRLF
 optional<Location> read_location(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "LOCATION") &&
-                read_locparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
-        if (!success)
+        Location ret;
+        if (!read_token(is, "LOCATION"))
                 return nullopt;
+
+        if (auto v = read_locparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_text(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 //       orgparam   = *(
 //                  ;

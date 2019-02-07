@@ -156,7 +156,7 @@ optional<Geo> read_geo(istream &is);
 bool read_lstparam(istream &is);
 optional<LastMod> read_last_mod(istream &is);
 bool read_locparam_single(istream &is);
-bool read_locparam(istream &is);
+optional<LocParams> read_locparam(istream &is);
 optional<Location> read_location(istream &is);
 optional<OrgParams> read_orgparam(istream &is);
 optional<Uri> read_cal_address(istream &is);

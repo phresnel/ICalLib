@@ -147,7 +147,14 @@ struct Created {};
 struct Description {};
 struct Geo {};
 struct LastMod {};
-struct Location {};
+
+struct LocParams : having_other_params {
+        optional<AltRepParam> alt_rep;
+        optional<LanguageParam> language;
+};
+struct Location : having_string_value {
+        LocParams params;
+};
 
 struct Organizer {
         OrgParams params;
