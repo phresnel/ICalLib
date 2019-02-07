@@ -26,12 +26,21 @@ void print_location(std::istream::pos_type pos, std::istream &is) {
         const auto where = pos;
         is.seekg(0);
         int line = 1, col = 1;
-        while(is.tellg() < where) {
-                if(read_newline(is)) {
+        while(is.tellg() != where) {
+                const auto i = is.get();
+                switch (i) {
+                case '\r':
+                        if (is.peek() == '\n')
+                                is.get();
+                case '\n':
                         col = 1;
                         ++line;
-                } else {
-                        auto g = is.get();
+                        break;
+                case EOF:
+                        std::cerr << "premature EOF while computing line/col\n";
+                        break;
+                default:
+                        ++col;
                 }
         }
         std::cerr << " (while parsing line " << line << ":" << col << ")\n";
@@ -232,10 +241,32 @@ string expect_digit(std::istream &is) {
         return string() + (char)i;
 }
 
+string expect_digit(std::istream &is, int min, int max) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto i = is.get();
+        if (i<'0'+min || i>'0'+max)
+                throw syntax_error(is.tellg(),
+                        "expected digit in range [" +
+                                std::to_string(min) + ".." +
+                                std::to_string(max) + "]");
+        ptran.commit();
+        return string() + (char)i;
+}
+
 optional<string> read_digit(std::istream &is) {
         CALLSTACK;
         try {
                 return expect_digit(is);
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+optional<string> read_digit(std::istream &is, int min, int max) {
+        CALLSTACK;
+        try {
+                return expect_digit(is, min, max);
         } catch (syntax_error &) {
                 return nullopt;
         }

@@ -296,13 +296,49 @@ optional<string> read_port(std::istream &is) {
 //      reg-name    = *( unreserved / pct-encoded / sub-delims )
 optional<string> read_reg_name(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        string ret;
+
+        while(true) {
+                if (auto v = read_unreserved(is)) ret += *v;
+                else if (auto v = read_pct_encoded(is)) ret += *v;
+                else if (auto v = read_sub_delims(is)) ret += *v;
+                else break;
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //      IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 optional<string> read_IPv4address(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        string ret;
+
+        if (auto v = read_dec_octet(is)) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_token(is, ".")) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_dec_octet(is)) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_token(is, ".")) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_dec_octet(is)) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_token(is, ".")) ret += *v;
+        else return nullopt;
+
+        if (auto v = read_dec_octet(is)) ret += *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
 }
 
 //      dec-octet   = DIGIT                 ; 0-9
@@ -312,7 +348,60 @@ optional<string> read_IPv4address(std::istream &is) {
 //                  / "25" %x30-35          ; 250-255
 optional<string> read_dec_octet(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+
+        {
+                // "25" %x30-35          ; 250-255
+                save_input_pos ptran(is);
+                const auto a = read_digit(is, 2, 2);
+                const auto b = read_digit(is, 5, 5);
+                const auto c = read_digit(is, 0, 5);
+                if (a && b && c) {
+                        ptran.commit();
+                        return *a + *b + *c;
+                }
+        }
+        {
+                // "2" %x30-34 DIGIT     ; 200-249
+                save_input_pos ptran(is);
+                const auto a = read_digit(is, 2, 2);
+                const auto b = read_digit(is, 0, 4);
+                const auto c = read_digit(is);
+                if (a && b && c) {
+                        ptran.commit();
+                        return *a + *b + *c;
+                }
+        }
+        {
+                // "1" 2DIGIT            ; 100-199
+                save_input_pos ptran(is);
+                const auto a = read_digit(is, 1, 1);
+                const auto b = read_digit(is);
+                const auto c = read_digit(is);
+                if (a && b && c) {
+                        ptran.commit();
+                        return *a + *b + *c;
+                }
+        }
+        {
+                // %x31-39 DIGIT         ; 10-99
+                save_input_pos ptran(is);
+                const auto a = read_digit(is, 1, 9);
+                const auto b = read_digit(is);
+                if (a && b) {
+                        ptran.commit();
+                        return *a + *b;
+                }
+        }
+        {
+                // DIGIT                 ; 0-9
+                save_input_pos ptran(is);
+                const auto a = read_digit(is);
+                if (a) {
+                        ptran.commit();
+                        return *a;
+                }
+        }
+        return nullopt;
 }
 
 //      IPv6address =                            6( h16 ":" ) ls32
@@ -348,7 +437,31 @@ optional<string> read_h16(std::istream &is) {
 //      IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
 optional<string> read_IP_literal(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        string ret;
+
+        if (auto v = read_token(is, "[")) {
+                ret += *v;
+        } else {
+                return nullopt;
+        }
+
+        if (auto v = read_IPv6address(is)) {
+                ret += *v;
+        } else if (auto v = read_IPvFuture(is)) {
+                ret += *v;
+        } else {
+                return nullopt;
+        }
+
+        if (auto v = read_token(is, "]")) {
+                ret += *v;
+        } else {
+                return nullopt;
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //      IPvFuture  = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
@@ -360,19 +473,78 @@ optional<string> read_IPvFuture(std::istream &is) {
 //      host        = IP-literal / IPv4address / reg-name
 optional<string> read_host(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        if (auto v = read_IP_literal(is)) return v;
+        if (auto v = read_IPv4address(is)) return v;
+        if (auto v = read_reg_name(is)) return v;
+        return nullopt;
 }
 
 //      userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
 optional<string> read_userinfo(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        string ret;
+        while(true) {
+                if (auto v = read_unreserved(is)) ret += *v;
+                else if (auto v = read_pct_encoded(is)) ret += *v;
+                else if (auto v = read_sub_delims(is)) ret += *v;
+                else if (auto v = read_token(is, ":")) ret += *v;
+                else break;
+        }
+        return ret;
+}
+
+//      scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+optional<string> read_scheme(std::istream &is) {
+        save_input_pos ptran(is);
+        string ret;
+
+        if (auto v = read_alpha(is)) {
+                ret += *v;
+        } else {
+                return nullopt;
+        }
+
+        while (true) {
+                if (auto v = read_alpha(is)) ret += *v;
+                else if (auto v = read_digit(is)) ret += *v;
+                else if (auto v = read_token(is, "+")) ret += *v;
+                else if (auto v = read_token(is, "-")) ret += *v;
+                else if (auto v = read_token(is, ".")) ret += *v;
+                else break;
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //      authority   = [ userinfo "@" ] host [ ":" port ]
-optional<string> read_authority(std::istream &is) {
+optional<Authority> read_authority(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        Authority ret;
+
+        if (auto v = read_userinfo(is)) {
+                ret.userinfo = v;
+                if (!read_token(is, "@"))
+                        return nullopt;
+        }
+
+        if (auto v = read_host(is)) {
+                ret.host = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (read_token(is, ":")) {
+                if (auto v = read_port(is)) {
+                        ret.port = v;
+                } else {
+                        return nullopt;
+                }
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //      relative-part = "//" authority path-abempty
@@ -388,7 +560,7 @@ optional<string> read_relative_part(std::istream &is) {
                 const auto c = read_path_abempty(is);
                 if (a && b && c) {
                         ptran.commit();
-                        return *a + *b + *c;
+                        return *a + to_string(*b) + *c;
                 }
         }
         {
@@ -442,13 +614,78 @@ optional<string> read_query(std::istream &is) {
 //                  / path-empty
 optional<string> read_hier_part(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        {
+                save_input_pos ptran(is);
+                const auto a = read_token(is, "//");
+                const auto b = read_authority(is);
+                const auto c = read_path_abempty(is);
+                if (a && b && c) {
+                        ptran.commit();
+                        return *a + to_string(*b) + *c;
+                }
+        }
+        {
+                save_input_pos ptran(is);
+                const auto a = read_path_absolute(is);
+                if (a) {
+                        ptran.commit();
+                        return *a;
+                }
+        }
+        {
+                save_input_pos ptran(is);
+                const auto a = read_path_rootless(is);
+                if (a) {
+                        ptran.commit();
+                        return *a;
+                }
+        }
+        {
+                save_input_pos ptran(is);
+                const auto a = read_path_empty(is);
+                if (a) {
+                        ptran.commit();
+                        return *a;
+                }
+        }
+        return nullopt;
 }
 
 //      URI         = scheme ":" hier-part [ "?" query ] [ "#" fragment ]
-optional<string> read_URI(std::istream &is) {
+optional<Uri> read_URI(std::istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        Uri ret;
+
+        if (auto v = read_scheme(is)) {
+                ret.scheme = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_token(is, ":"))
+                return nullopt;
+
+        if (auto v = read_hier_part(is)) {
+                ret.hier_part = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (read_token(is, "?")) {
+                ret.query = read_query(is);
+                if (!ret.query)
+                        return nullopt;
+        }
+
+        if (read_token(is, "#")) {
+                ret.fragment = read_fragment(is);
+                if (!ret.fragment)
+                        return nullopt;
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //      absolute-URI  = scheme ":" hier-part [ "?" query ]

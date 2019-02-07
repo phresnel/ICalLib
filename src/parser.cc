@@ -395,7 +395,116 @@ optional<string> read_value_char(istream &is) {
 //     ; Any character except CONTROL and DQUOTE
 optional<string> read_qsafe_char(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        // WSP
+        if (auto v = read_wsp(is)) {
+                ptran.commit();
+                return v;
+        }
+        const auto i = is.get();
+        switch(i) {
+                // %x21
+        case '!':
+                // %x23-7E
+        case '#':
+        case '$':
+        case '%':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case '+':
+        case ',':
+        case '-':
+        case '.':
+        case '/':
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case ':':
+        case ';':
+        case '<':
+        case '=':
+        case '>':
+        case '?':
+        case '@':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+        case '[':
+        case '\\':
+        case ']':
+        case '^':
+        case '_':
+        case '`':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+        case '{':
+        case '|':
+        case '}':
+        case '~':
+                ptran.commit();
+                return string() + char(i);
+        }
+
+        // NON-US-ASCII
+        //std::cerr << "todo: non-us-ascii" << std::endl;
+        return nullopt;
 }
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
@@ -455,8 +564,18 @@ string expect_param_name(istream &is) {
 //     param-value   = paramtext / quoted-string
 optional<string> read_param_value(istream &is) {
         CALLSTACK;
-        if (auto v = read_paramtext(is)) return *v;
-        if (auto v = read_quoted_string(is)) return *v;
+        // NOTE: the testing order of paramtext and quoted-string
+        //       as per the RFC is errorful, as paramtext can be
+        //       validly empty, meaning that when in fact we have a
+        //       quoted string, it will never be matched, because paramtext
+        //       will successfully return an empty string.
+        //       Therefore, we switched it here.
+        if (auto v = read_quoted_string(is))  {
+                return *v;
+        }
+        if (auto v = read_paramtext(is)) {
+                return *v;
+        }
         return nullopt;
 }
 string expect_param_value(istream &is) {
@@ -1025,15 +1144,15 @@ string expect_text(istream &is) {
         return ret;
 }
 
-// DQUOTE: ASCII 22
+// DQUOTE: ASCII 22 == '"'
 optional<string> read_dquote(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto c = is.get();
-        if (c != 22)
+        if (c != '"')
                 return nullopt;
         ptran.commit();
-        return string() + (char)22;
+        return "\"";
 }
 
 optional<string> read_text(istream &is) {
@@ -2099,7 +2218,7 @@ optional<OrgParams> read_orgparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         OrgParams ret;
-        while(true) {
+        while(read_token(is, ";")) {
                 if (auto v = read_cnparam(is)) {
                         ret.cn = *v;
                 } else if (auto v = read_dirparam(is)) {
@@ -2111,14 +2230,17 @@ optional<OrgParams> read_orgparam(istream &is) {
                 } else if (auto v = read_other_param(is)) {
                         ret.params.push_back(*v);
                 } else {
-                        break;
+                        std::cerr << " unknown" << std::endl;
+                        // TODO: warn
                 }
         }
+        ptran.commit();
         return ret;
 }
-optional<string> read_cal_address(istream &is) {
+//       cal-address        = uri
+optional<Uri> read_cal_address(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        return read_uri(is);
 }
 //       organizer  = "ORGANIZER" orgparam ":" cal-address CRLF
 optional<Organizer> read_organizer(istream &is) {
@@ -2380,14 +2502,14 @@ optional<Transp> read_transp(istream &is) {
         NOT_IMPLEMENTED;
 }
 //      uri = <As defined in Section 3 of [RFC3986]>
-bool read_uri(istream &is) {
+optional<Uri> read_uri(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success = rfc3986::read_URI(is);
-        if (!success)
-                return false;
+        const auto uri = rfc3986::read_URI(is);
+        if (!uri)
+                return nullopt;
         ptran.commit();
-        return true;
+        return uri;
 }
 //       urlparam   = *(";" other-param)
 bool read_urlparam(istream &is) {
@@ -4698,7 +4820,28 @@ optional<IanaParam> read_iana_param(istream &is) {
 //     ; A non-standard, experimental parameter.
 optional<XParam> read_x_param(istream &is) {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        XParam ret;
+
+        if (auto v = read_x_name(is)) {
+                ret.name = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_token(is, "="))
+                return nullopt;
+
+        do {
+                if (auto v = read_param_value(is)) {
+                        ret.values.push_back(*v);
+                } else {
+                        return nullopt;
+                }
+        } while (read_token(is, ","));
+
+        ptran.commit();
+        return ret;
 }
 
 

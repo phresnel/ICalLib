@@ -8,6 +8,8 @@
 #include <variant>
 #include <vector>
 
+#include "rfc3986.hh"
+
 // string
 using std::string;
 
@@ -41,13 +43,11 @@ struct having_string_name { string name; };
 struct having_string_value { string value; };
 template <typename T> struct having_value { T value; };
 struct having_string_values { vector<string> values; };
+struct having_uri_values { vector<Uri> values; };
 
 // ICalendar types
-struct XParam {};
-struct IanaParam {
-        string token;
-        vector<string> values;
-};
+struct XParam : having_string_name, having_string_values {};
+struct IanaParam : having_string_values { string token; };
 using OtherParam = variant<XParam, IanaParam>;
 
 struct Param : having_string_name, having_string_values {};
@@ -98,7 +98,7 @@ struct EncodingParam : having_string_value {};
 struct FmtTypeParam : having_string_value {};
 struct FbTypeParam : having_string_value {};
 struct LanguageParam : having_string_value {};
-struct MemberParam : having_string_values {};
+struct MemberParam : having_uri_values {};
 struct RangeParam : having_string_value {};
 struct TrigRelParam : having_string_value {};
 struct RelTypeParam : having_string_value {};
@@ -151,7 +151,7 @@ struct Location {};
 
 struct Organizer {
         OrgParams params;
-        string address;
+        Uri address;
 };
 struct Priority {};
 struct Seq {};
