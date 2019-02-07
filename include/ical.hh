@@ -49,12 +49,10 @@ using OtherParam = variant<XParam, IanaParam>;
 
 struct Param : having_string_name, having_string_values {};
 
-struct having_other_params {  std::vector<OtherParam> params; };
-struct having_params { std::vector<Param> params; };
+struct having_other_params {  vector<OtherParam> params; };
+struct having_params { vector<Param> params; };
 
-struct ProdId : having_string_value {
-        vector<OtherParam> params;
-};
+struct ProdId : having_string_value, having_other_params {};
 
 struct Version : having_other_params, having_string_value {
         // TODO: this is currently just a hack
@@ -132,7 +130,7 @@ using ICalParameter = variant<AltRepParam,
                               OtherParam>;
 
 struct DtStamp {};
-struct Uid {};
+struct Uid : having_string_value,  having_other_params {};
 struct DtStart {};
 struct Class {};
 struct Created {};

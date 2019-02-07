@@ -80,10 +80,13 @@ private:
 
 extern CallStack callStack;
 
-//#define CALLSTACK \
+#if false
+#define CALLSTACK \
         CallStack::Entry \
                 call_stack_entry_##__LINE__ = callStack.push(__func__);
+#else
 #define CALLSTACK
+#endif
 
 class not_implemented : public std::runtime_error {
 public:

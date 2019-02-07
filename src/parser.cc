@@ -1741,30 +1741,48 @@ optional<DtStamp> read_dtstamp(istream &is) {
         //return true;
 }
 //       uidparam   = *(";" other-param)
-bool read_uidparam(istream &is) {
+optional<vector<OtherParam>> read_uidparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        vector<OtherParam> ret;
         while (read_token(is, ";")) {
-                if (!read_other_param(is))
-                        return false;
+                if (auto v = read_other_param(is)) {
+                        ret.push_back(*v);
+                } else {
+                        return nullopt;
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       uid        = "UID" uidparam ":" text CRLF
 optional<Uid> read_uid(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "UID") &&
-                read_uidparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
-        if (!success)
+        Uid ret;
+
+        if (!read_token(is, "UID"))
+                return nullopt;
+
+        if (auto v = read_uidparam(is)) {
+                ret.params = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_token(is, ":"))
+                return nullopt;
+
+        if (auto v = read_text(is)) {
+                ret.value = *v;
+        } else {
+                return nullopt;
+        }
+
+        if (!read_newline(is))
                 return nullopt;
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
         //return true;
 }
 //       dtstval    = date-time / date
@@ -2074,7 +2092,9 @@ optional<Location> read_location(istream &is) {
 //                  ; The following are OPTIONAL,
 //                  ; but MUST NOT occur more than once.
 //                  ;
-//                  (";" cnparam) / (";" dirparam) / (";" sentbyparam) /
+//                  (";" cnparam) /
+//                  (";" dirparam) /
+//                  (";" sentbyparam) /
 //                  (";" languageparam) /
 //                  ;
 //                  ; The following is OPTIONAL,

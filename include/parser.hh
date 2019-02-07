@@ -137,7 +137,7 @@ bool read_period(istream &is);
 optional<OtherParam> read_other_param(istream &is);
 bool read_stmparam(istream &is);
 optional<DtStamp> read_dtstamp(istream &is);
-bool read_uidparam(istream &is);
+optional<vector<OtherParam>> read_uidparam(istream &is);
 optional<Uid> read_uid(istream &is);
 bool read_dtstval(istream &is);
 bool read_dtstparam_single(istream &is);
