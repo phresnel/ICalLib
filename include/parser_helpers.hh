@@ -12,7 +12,7 @@ inline namespace parser_helpers {
 
 using std::string;
 using std::vector;
-using std::optional;
+using std::optional; // TODO: Should use a variant type to signal errors.
 using std::nullopt;
 
 class CallStack {

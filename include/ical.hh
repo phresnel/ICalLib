@@ -139,9 +139,51 @@ struct OrgParams : having_other_params {
         optional<LanguageParam> language;
 };
 
-struct DtStamp {};
+struct Date {
+        string year;
+        string month;
+        string day;
+};
+
+struct Time {
+        string hour;
+        string minute;
+        string second;
+        optional<string> utc;
+};
+
+struct DateTime {
+        Date date;
+        Time time;
+};
+
+struct DtStampParams : having_other_params {
+};
+struct DtStamp {
+        DtStampParams params;
+        DateTime date_time;
+};
+
 struct Uid : having_string_value,  having_other_params {};
-struct DtStart {};
+
+struct DtStartParams : having_string_value, having_other_params {
+        TzIdParam tz_id;
+};
+using DtStartVal = variant<DateTime, Date>;
+struct DtStart : having_string_value {
+        DtStartParams params;
+        DtStartVal value;
+};
+
+struct DtEndParams : having_string_value, having_other_params {
+        TzIdParam tz_id;
+};
+using DtEndVal = variant<DateTime, Date>;
+struct DtEnd : having_string_value {
+        DtEndParams params;
+        DtEndVal value;
+};
+
 struct ClassParams : having_other_params {};
 struct Class : having_string_value {
         ClassParams params;
@@ -191,7 +233,6 @@ struct Transp {};
 struct Url {};
 struct RecurId {};
 struct RRule {};
-struct DtEnd {};
 struct Duration {};
 struct Attach {};
 struct Attendee {};

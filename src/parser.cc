@@ -1527,141 +1527,112 @@ optional<Alarm> read_alarmc(istream &is) {
 }
 
 //       date-fullyear      = 4DIGIT
-bool read_date_fullyear(istream &is) {
+optional<string> read_date_fullyear(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_digit(is) &&
-                read_digit(is) &&
-                read_digit(is) &&
-                read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 4);
 }
+
 //       date-month         = 2DIGIT        ;01-12
-bool read_date_month(istream &is) {
+optional<string> read_date_month(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_digit(is) &&
-                read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 2);
 }
+
 //       date-mday          = 2DIGIT        ;01-28, 01-29, 01-30, 01-31
 //                                          ;based on month/year
-bool read_date_mday(istream &is) {
+optional<string> read_date_mday(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_digit(is) &&
-                read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 2);
 }
 
 //       date-value         = date-fullyear date-month date-mday
-bool read_date_value(istream &is) {
+optional<Date> read_date_value(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_date_fullyear(is) &&
-                read_date_month(is) &&
-                read_date_mday(is);
-        if (!success)
-                return false;
+        Date ret;
+
+        if (auto v = read_date_fullyear(is)) ret.year = *v;
+        else return nullopt;
+
+        if (auto v = read_date_month(is)) ret.month = *v;
+        else return nullopt;
+
+        if (auto v = read_date_mday(is)) ret.day = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       date               = date-value
-bool read_date(istream &is) {
+optional<Date> read_date(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success =
-                read_date_value(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_date_value(is);
 }
 
 //       time-hour    = 2DIGIT        ;00-23
-bool read_time_hour(istream &is) {
+optional<string> read_time_hour(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_digit(is) && read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 2);
 }
+
 //       time-minute  = 2DIGIT        ;00-59
-bool read_time_minute(istream &is) {
+optional<string> read_time_minute(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_digit(is) && read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 2);
 }
+
 //       time-second  = 2DIGIT        ;00-60
 //       ;The "60" value is used to account for positive "leap" seconds.
-bool read_time_second(istream &is) {
+optional<string> read_time_second(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_digit(is) && read_digit(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_digits(is, 2);
 }
+
 //       time-utc     = "Z"
-bool read_time_utc(istream &is) {
+optional<string> read_time_utc(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_token(is, "Z");
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return read_token(is, "Z");
 }
 
 //       time         = time-hour time-minute time-second [time-utc]
-bool read_time(istream &is) {
+optional<Time> read_time(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_time_hour(is) &&
-                read_time_minute(is) &&
-                read_time_second(is) &&
-                (read_time_utc(is) || true);
-        if (!success)
-                return false;
+        Time ret;
+
+        if (auto v = read_time_hour(is)) ret.hour = *v;
+        else return nullopt;
+
+        if (auto v = read_time_minute(is)) ret.minute = *v;
+        else return nullopt;
+
+        if (auto v = read_time_second(is)) ret.second = *v;
+        else return nullopt;
+
+        if (auto v = read_time_utc(is)) ret.utc = v;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       date-time  = date "T" time ;As specified in the DATE and TIME
 //                                  ;value definitions
-bool read_date_time(istream &is) {
+optional<DateTime> read_date_time(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_date(is) &&
-                read_token(is, "T") &&
-                read_time(is);
-        if (!success)
-                return false;
+        DateTime ret;
+
+        if (auto v = read_date(is)) ret.date = *v;
+        else return nullopt;
+
+        if (!read_token(is, "T")) return nullopt;
+
+        if (auto v = read_time(is)) ret.time = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       dur-week   = 1*DIGIT "W"
@@ -1831,32 +1802,42 @@ optional<OtherParam> read_other_param(istream &is) {
 }
 
 // stmparam   = *(";" other-param)
-bool read_stmparam(istream &is) {
+optional<DtStampParams> read_stmparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
+        DtStampParams ret;
+
         while (read_token(is, ";")) {
-                if (!read_other_param(is))
-                        return false;
+                if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        return nullopt;
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 // dtstamp    = "DTSTAMP" stmparam ":" date-time CRLF
 optional<DtStamp> read_dtstamp(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "DTSTAMP") &&
-                read_stmparam(is) &&
-                read_token(is, ":") &&
-                read_date_time(is) &&
-                read_newline(is);
-        if (!success)
-                return nullopt;
+        DtStamp ret;
+
+        if (!read_token(is, "DTSTAMP")) return nullopt;
+
+        if (auto v = read_stmparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_date_time(is)) ret.date_time = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
-        //return true;
+        return ret;
 }
 //       uidparam   = *(";" other-param)
 optional<vector<OtherParam>> read_uidparam(istream &is) {
@@ -1904,14 +1885,11 @@ optional<Uid> read_uid(istream &is) {
         //return true;
 }
 //       dtstval    = date-time / date
-bool read_dtstval(istream &is) {
+optional<DtStartVal> read_dtstval(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_date_time(is) || read_date(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        if (auto v = read_date_time(is)) return *v;
+        if (auto v = read_date(is)) return *v;
+        return nullopt;
 }
 //       ;Value MUST match value type
 //       dtstparam  = *(
@@ -1928,68 +1906,55 @@ bool read_dtstval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_dtstparam_single(istream &is) {
-        CALLSTACK;
-        // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_token(is, "VALUE") &&
-                        read_token(is, "=") &&
-                        (read_token(is, "DATE-TIME") || read_token(is, "DATE"));
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        // (";" tzidparam)
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_tzidparam(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        // (";" other-param)
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_other_param(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        return false;
-}
-bool read_dtstparam(istream &is) {
+optional<DtStartParams> read_dtstparam(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_dtstparam_single(is)) {
+        DtStartParams ret;
+
+        while (read_token(is, ";")) {
+                if (read_token(is, "VALUE")) {
+                        if (!read_token(is, "="))
+                                return nullopt;
+
+                        if (auto v = read_token(is, "DATE-TIME")) {
+                                ret.value = *v;
+                        } else if (auto v = read_token(is, "DATE")) {
+                                ret.value = *v;
+                        } else {
+                                return nullopt;
+                        }
+                } else if (auto v = read_tzidparam(is)) {
+                        ret.tz_id = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        return nullopt;
+                }
         }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       dtstart    = "DTSTART" dtstparam ":" dtstval CRLF
 //
 optional<DtStart> read_dtstart(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "DTSTART") &&
-                read_dtstparam(is) &&
-                read_token(is, ":") &&
-                read_dtstval(is) &&
-                read_newline(is);
-        if (!success)
-                return nullopt;
+        DtStart ret;
+
+        if (!read_token(is, "DTSTART")) return nullopt;
+
+        if (auto v = read_dtstparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_dtstval(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 
 //       classvalue = "PUBLIC" / "PRIVATE" / "CONFIDENTIAL" / iana-token
@@ -3076,6 +3041,7 @@ bool read_rrulparam(istream &is) {
         ptran.commit();
         return true;
 }
+
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
 optional<RRule> read_rrule(istream &is) {
         CALLSTACK;
@@ -3091,18 +3057,17 @@ optional<RRule> read_rrule(istream &is) {
         ptran.commit();
         NOT_IMPLEMENTED;
 }
+
 //       dtendval   = date-time / date
 //       ;Value MUST match value type
-bool read_dtendval(istream &is) {
+optional<DtEndVal> read_dtendval(istream &is) {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto success = read_date_time(is) ||read_date(is);
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        if (auto v = read_date_time(is)) return *v;
+        if (auto v = read_date(is)) return *v;
+        return nullopt;
 }
-//        = *(
+
+//       dtendparam = *(
 //                  ;
 //                  ; The following are OPTIONAL,
 //                  ; but MUST NOT occur more than once.
@@ -3116,60 +3081,57 @@ bool read_dtendval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //           )
-bool read_dtendparam(istream &is) {
+optional<DtEndParams> read_dtendparam(istream &is) {
         CALLSTACK;
-        // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_token(is, "VALUE") &&
-                        read_token(is, "=") &&
-                        (read_token(is, "DATE-TIME") || read_token(is, "DATE"));
-                if (success) {
-                        ptran.commit();
-                        return true;
+        save_input_pos ptran(is);
+        DtEndParams ret;
+
+        while (read_token(is, ";")) {
+                if (read_token(is, "VALUE")) {
+                        if (!read_token(is, "="))
+                                return nullopt;
+
+                        if (auto v = read_token(is, "DATE-TIME")) {
+                                ret.value = *v;
+                        } else if (auto v = read_token(is, "DATE")) {
+                                ret.value = *v;
+                        } else {
+                                return nullopt;
+                        }
+                } else if (auto v = read_tzidparam(is)) {
+                        ret.tz_id = *v;
+                } else if (auto v = read_other_param(is)) {
+                        ret.params.push_back(*v);
+                } else {
+                        return nullopt;
                 }
         }
-        // (";" tzidparam)
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_tzidparam(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        // (";" other-param)
-        {
-                save_input_pos ptran(is);
-                const auto success =
-                        read_token(is, ";") &&
-                        read_other_param(is);
-                if (success) {
-                        ptran.commit();
-                        return true;
-                }
-        }
-        return false;
+        ptran.commit();
+        return ret;
 }
+
 //       dtend      = "DTEND" dtendparam ":" dtendval CRLF
 optional<DtEnd> read_dtend(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_token(is, "DTEND") &&
-                read_dtendparam(is) &&
-                read_token(is, ":") &&
-                read_dtendval(is) &&
-                read_newline(is);
-        if (!success)
-                return nullopt;
+        DtEnd ret;
+
+        if (!read_token(is, "DTEND")) return nullopt;
+
+        if (auto v = read_dtendparam(is)) ret.params = *v;
+        else return nullopt;
+
+        if (!read_token(is, ":")) return nullopt;
+
+        if (auto v = read_dtendval(is)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_newline(is)) return nullopt;
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
+
 //       durparam   = *(";" other-param)
 bool read_durparam(istream &is) {
         CALLSTACK;
@@ -3182,6 +3144,7 @@ bool read_durparam(istream &is) {
         ptran.commit();
         return true;
 }
+
 //       duration   = "DURATION" durparam ":" dur-value CRLF
 //                    ;consisting of a positive duration of time.
 optional<Duration> read_duration(istream &is) {

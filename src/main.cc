@@ -13,8 +13,8 @@ void read_file(std::string const &filename) {
         }
         //std::stringstream ss; ss << f.rdbuf();
         try {
-                expect_ical(f);
-                std::cout << "done." << std::endl;
+                auto ical = expect_ical(f);
+                std::cout << ical << std::endl;
         } catch (syntax_error &e) {
                 std::cerr << "syntax-error:" << e.what();
                 print_location(e.pos, f);
