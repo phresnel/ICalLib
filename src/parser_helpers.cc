@@ -20,6 +20,11 @@ void dump_remainder(std::istream &is) {
         }
 }
 
+void dump_remainder_and_exit(std::istream &is) {
+        dump_remainder(is);
+        exit(1);
+}
+
 CallStack callStack;
 
 void print_location(std::istream::pos_type pos, std::istream &is) {
@@ -278,7 +283,7 @@ optional<string> read_digits(std::istream &is, int at_least, int at_most) {
         int c = 0;
         string ret;
         optional<string> tmp;
-        while ((tmp=read_digit(is)) && (at_most<0 || c<at_most)) {
+        while ((at_most<0 || c<at_most) && (tmp=read_digit(is))) {
                 ++c;
                 ret += *tmp;
         }
@@ -290,6 +295,11 @@ optional<string> read_digits(std::istream &is, int at_least, int at_most) {
 
         ptran.commit();
         return ret;
+}
+
+optional<string> read_digits(std::istream &is, int num) {
+        CALLSTACK;
+        return read_digits(is, num, num);
 }
 
 string expect_alnum(std::istream &is) {

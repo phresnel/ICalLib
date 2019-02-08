@@ -184,6 +184,7 @@ public:
 };
 
 void dump_remainder(std::istream &is);
+void dump_remainder_and_exit(std::istream &is);
 
 // -- Parser Helpers. ----------------------------------------------------------
 string expect_token(std::istream &is, string const &tok);
@@ -199,7 +200,8 @@ optional<string> read_hex(std::istream &is);
 optional<string> read_alpha(std::istream &is);
 optional<string> read_digit(std::istream &is);
 optional<string> read_digit(std::istream &is, int min, int max);
-optional<string> read_digits(std::istream &is, int at_least, int at_most = -1);
+optional<string> read_digits(std::istream &is, int at_least, int at_most);
+optional<string> read_digits(std::istream &is, int num);
 optional<string> read_alnum(std::istream &is);
 
 }
