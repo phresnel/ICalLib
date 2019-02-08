@@ -1796,9 +1796,9 @@ bool read_period(istream &is) {
 //     other-param   = (iana-param / x-param)
 optional<OtherParam> read_other_param(istream &is) {
         CALLSTACK;
-        if (auto v = read_iana_param(is)) return v;
-        if (auto v = read_x_param(is)) return v;
-        return nullopt;
+        if (auto v = read_iana_param(is)) return OtherParam{*v};
+        if (auto v = read_x_param(is)) return OtherParam{*v};
+        return optional<OtherParam>();
 }
 
 // stmparam   = *(";" other-param)
@@ -1887,9 +1887,9 @@ optional<Uid> read_uid(istream &is) {
 //       dtstval    = date-time / date
 optional<DtStartVal> read_dtstval(istream &is) {
         CALLSTACK;
-        if (auto v = read_date_time(is)) return *v;
-        if (auto v = read_date(is)) return *v;
-        return nullopt;
+        if (auto v = read_date_time(is)) return DtStartVal{*v};
+        if (auto v = read_date(is)) return DtStartVal{*v};
+        return optional<DtStartVal>();
 }
 //       ;Value MUST match value type
 //       dtstparam  = *(
@@ -3062,9 +3062,9 @@ optional<RRule> read_rrule(istream &is) {
 //       ;Value MUST match value type
 optional<DtEndVal> read_dtendval(istream &is) {
         CALLSTACK;
-        if (auto v = read_date_time(is)) return *v;
-        if (auto v = read_date(is)) return *v;
-        return nullopt;
+        if (auto v = read_date_time(is)) return DtEndVal{*v};
+        if (auto v = read_date(is)) return DtEndVal{*v};
+        return optional<DtStartVal>();
 }
 
 //       dtendparam = *(
@@ -3859,7 +3859,7 @@ optional<EventProp> read_eventprop_single(istream &is) {
         else if (auto v = read_x_prop(is)) ret = *v;
         else if (auto v = read_iana_prop(is)) ret = *v;
 
-        else return nullopt;
+        else return optional<EventProp>();
 
         ptran.commit();
         return ret;
@@ -4242,7 +4242,7 @@ optional<Component> read_component_single(istream &is) {
         else if (auto v = read_timezonec(is)) ret = *v;
         else if (auto v = read_iana_comp(is)) ret = *v;
         else if (auto v = read_x_comp(is)) ret = *v;
-        else return nullopt;
+        else return optional<Component>();
         ptran.commit();
         return ret;
 }
@@ -4576,8 +4576,8 @@ optional<PartStatParam> read_partstatparam(istream &is) {
         save_input_pos ptran(is);
         PartStatParam ret;
 
-        if (!read_token(is, "PARTSTAT")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!read_token(is, "PARTSTAT")) return optional<PartStatParam>();
+        if (!read_token(is, "=")) return optional<PartStatParam>();
 
         if (auto v = read_partstat_event(is)) {
                 ret = *v;
@@ -4586,7 +4586,7 @@ optional<PartStatParam> read_partstatparam(istream &is) {
         } else if (auto v = read_partstat_jour(is)) {
                 ret = *v;
         } else {
-                return nullopt;
+                return optional<PartStatParam>();
         }
         ptran.commit();
         return ret;
@@ -4889,26 +4889,26 @@ ICalParameter expect_icalparameter(istream &is) {
 }
 optional<ICalParameter> read_icalparameter(istream &is) {
         CALLSTACK;
-        if (auto v = read_altrepparam(is)) return v;
-        if (auto v = read_cnparam(is)) return v;
-        if (auto v = read_cutypeparam(is)) return v;
-        if (auto v = read_delfromparam(is)) return v;
-        if (auto v = read_deltoparam(is)) return v;
-        if (auto v = read_dirparam(is)) return v;
-        if (auto v = read_encodingparam(is)) return v;
-        if (auto v = read_fmttypeparam(is)) return v;
-        if (auto v = read_fbtypeparam(is)) return v;
-        if (auto v = read_languageparam(is)) return v;
-        if (auto v = read_memberparam(is)) return v;
-        if (auto v = read_partstatparam(is)) return v;
-        if (auto v = read_rangeparam(is)) return v;
-        if (auto v = read_trigrelparam(is)) return v;
-        if (auto v = read_reltypeparam(is)) return v;
-        if (auto v = read_roleparam(is)) return v;
-        if (auto v = read_rsvpparam(is)) return v;
-        if (auto v = read_sentbyparam(is)) return v;
-        if (auto v = read_tzidparam(is)) return v;
-        if (auto v = read_valuetypeparam(is)) return v;
-        if (auto v = read_other_param(is)) return v;
-        return nullopt;
+        if (auto v = read_altrepparam(is)) return ICalParameter{*v};
+        if (auto v = read_cnparam(is)) return ICalParameter{*v};
+        if (auto v = read_cutypeparam(is)) return ICalParameter{*v};
+        if (auto v = read_delfromparam(is)) return ICalParameter{*v};
+        if (auto v = read_deltoparam(is)) return ICalParameter{*v};
+        if (auto v = read_dirparam(is)) return ICalParameter{*v};
+        if (auto v = read_encodingparam(is)) return ICalParameter{*v};
+        if (auto v = read_fmttypeparam(is)) return ICalParameter{*v};
+        if (auto v = read_fbtypeparam(is)) return ICalParameter{*v};
+        if (auto v = read_languageparam(is)) return ICalParameter{*v};
+        if (auto v = read_memberparam(is)) return ICalParameter{*v};
+        if (auto v = read_partstatparam(is)) return ICalParameter{*v};
+        if (auto v = read_rangeparam(is)) return ICalParameter{*v};
+        if (auto v = read_trigrelparam(is)) return ICalParameter{*v};
+        if (auto v = read_reltypeparam(is)) return ICalParameter{*v};
+        if (auto v = read_roleparam(is)) return ICalParameter{*v};
+        if (auto v = read_rsvpparam(is)) return ICalParameter{*v};
+        if (auto v = read_sentbyparam(is)) return ICalParameter{*v};
+        if (auto v = read_tzidparam(is)) return ICalParameter{*v};
+        if (auto v = read_valuetypeparam(is)) return ICalParameter{*v};
+        if (auto v = read_other_param(is)) return ICalParameter{*v};
+        return optional<ICalParameter>();
 }

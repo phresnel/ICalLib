@@ -41,34 +41,33 @@ std::ostream& operator<<(std::ostream& os, CalProps const& v) {
 
 std::ostream& operator<<(std::ostream& os, Component const& v) {
         if (auto p = get_opt<EventComp>(v)) {
-                std::cerr << "event-comp" << std::endl;
-                return os << *p;
+                return os << "event-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<TodoComp>(v)) {
-                std::cerr << "todo-comp" << std::endl;
-                return os << *p;
+                return os << "todo-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<JournalComp>(v)) {
-                std::cerr << "journal-comp" << std::endl;
-                return os << *p;
+                return os << "journal-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<FreeBusyComp>(v)) {
-                std::cerr << "free-busy-comp" << std::endl;
-                return os << *p;
+                return os << "free-busy-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<TimezoneComp>(v)) {
-                std::cerr << "timezone-comp" << std::endl;
-                return os << *p;
+                return os << "timezone-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<IanaComp>(v)) {
-                std::cerr << "iana-comp" << std::endl;
-                return os << *p;
+                return os << "iana-comp\n";
+                //return os << *p;
         }
         if (auto p = get_opt<XComp>(v)) {
-                std::cerr << "x-comp" << std::endl;
-                return os << *p;
+                return os << "x-comp\n";
+                //return os << *p;
         }
-        std::cerr << "invalid variant type" << std::endl;
         return os << "invalid variant type in Component";
 }
 

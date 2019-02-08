@@ -7,6 +7,8 @@ add_executable(
         supercal
         src/main.cc
 
+        include/xvariant.hh
+
         include/ical.hh           src/ical.cc
         include/parser.hh         src/parser.cc
         include/parser_helpers.hh src/parser_helpers.cc

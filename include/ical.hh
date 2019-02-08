@@ -5,10 +5,10 @@
 #include <optional>
 #include <string>
 #include <tuple>
-#include <variant>
 #include <vector>
 
 #include "rfc3986.hh"
+#include "xvariant.hh"
 
 // string
 using std::string;
@@ -24,20 +24,6 @@ using std::nullopt;
 using std::tuple;
 using std::make_tuple;
 
-// variant related
-using std::variant;
-using std::holds_alternative;
-using std::get;
-using std::get_if;
-
-template<typename T, typename ...VTypes>
-inline
-optional<T> get_opt(std::variant<VTypes...> const &v) {
-        auto p = get_if<T>(&v);
-        if (!p) return nullopt;
-        return *p;
-}
-
 // mixins
 struct having_string_name { string name; };
 struct having_string_value { string value; };
@@ -48,7 +34,7 @@ struct having_uri_values { vector<Uri> values; };
 // ICalendar types
 struct XParam : having_string_name, having_string_values {};
 struct IanaParam : having_string_values { string token; };
-using OtherParam = variant<XParam, IanaParam>;
+using OtherParam = xvariant<IanaParam, XParam>;
 
 struct Param : having_string_name, having_string_values {};
 
@@ -86,7 +72,7 @@ struct CalProps {
 struct PartStatEvent : having_string_value {};
 struct PartStatTodo : having_string_value {};
 struct PartStatJour: having_string_value {};
-using PartStatParam = variant<PartStatEvent, PartStatTodo, PartStatJour>;
+using PartStatParam = xvariant<PartStatEvent, PartStatTodo, PartStatJour>;
 
 struct AltRepParam : having_string_value {};
 struct CnParam : having_string_value {};
@@ -110,27 +96,27 @@ struct TzIdParam : having_string_value {};
 struct ValueType : having_string_value {};
 struct ValueTypeParam : having_value<ValueType> {};
 
-using ICalParameter = variant<AltRepParam,
-                              CnParam,
-                              CuTypeParam,
-                              DelFromParam,
-                              DelToParam,
-                              DirParam,
-                              EncodingParam,
-                              FmtTypeParam,
-                              FbTypeParam,
-                              LanguageParam,
-                              MemberParam,
-                              PartStatParam,
-                              RangeParam,
-                              TrigRelParam,
-                              RelTypeParam,
-                              RoleParam,
-                              RsvpParam,
-                              SentByParam,
-                              TzIdParam,
-                              ValueTypeParam,
-                              OtherParam>;
+using ICalParameter = xvariant<AltRepParam,
+                               CnParam,
+                               CuTypeParam,
+                               DelFromParam,
+                               DelToParam,
+                               DirParam,
+                               EncodingParam,
+                               FmtTypeParam,
+                               FbTypeParam,
+                               LanguageParam,
+                               MemberParam,
+                               PartStatParam,
+                               RangeParam,
+                               TrigRelParam,
+                               RelTypeParam,
+                               RoleParam,
+                               RsvpParam,
+                               SentByParam,
+                               TzIdParam,
+                               ValueTypeParam,
+                               OtherParam>;
 
 struct OrgParams : having_other_params {
         optional<CnParam> cn;
@@ -169,7 +155,7 @@ struct Uid : having_string_value,  having_other_params {};
 struct DtStartParams : having_string_value, having_other_params {
         TzIdParam tz_id;
 };
-using DtStartVal = variant<DateTime, Date>;
+using DtStartVal = xvariant<DateTime, Date>;
 struct DtStart : having_string_value {
         DtStartParams params;
         DtStartVal value;
@@ -178,7 +164,7 @@ struct DtStart : having_string_value {
 struct DtEndParams : having_string_value, having_other_params {
         TzIdParam tz_id;
 };
-using DtEndVal = variant<DateTime, Date>;
+using DtEndVal = xvariant<DateTime, Date>;
 struct DtEnd : having_string_value {
         DtEndParams params;
         DtEndVal value;
@@ -252,38 +238,38 @@ struct XProp :
 };
 struct IanaProp {};
 
-using EventProp = variant<DtStamp,
-                          Uid,
-                          DtStart,
-                          Class,
-                          Created,
-                          Description,
-                          Geo,
-                          LastMod,
-                          Location,
-                          Organizer,
-                          Priority,
-                          Seq,
-                          Status,
-                          Summary,
-                          Transp,
-                          Url,
-                          RecurId,
-                          RRule,
-                          DtEnd,
-                          Duration,
-                          Attach,
-                          Attendee,
-                          Categories,
-                          Comment,
-                          Contact,
-                          ExDate,
-                          RStatus,
-                          Related,
-                          Resources,
-                          RDate,
-                          XProp,
-                          IanaProp>;
+using EventProp = xvariant<DtStamp,
+                           Uid,
+                           DtStart,
+                           Class,
+                           Created,
+                           Description,
+                           Geo,
+                           LastMod,
+                           Location,
+                           Organizer,
+                           Priority,
+                           Seq,
+                           Status,
+                           Summary,
+                           Transp,
+                           Url,
+                           RecurId,
+                           RRule,
+                           DtEnd,
+                           Duration,
+                           Attach,
+                           Attendee,
+                           Categories,
+                           Comment,
+                           Contact,
+                           ExDate,
+                           RStatus,
+                           Related,
+                           Resources,
+                           RDate,
+                           XProp,
+                           IanaProp>;
 struct EventComp {
         vector<EventProp> properties;
         vector<Alarm> alarms;
@@ -295,13 +281,13 @@ struct FreeBusyComp {};
 struct TimezoneComp {};
 struct IanaComp {};
 struct XComp {};
-using Component = variant<EventComp,
-                          TodoComp,
-                          JournalComp,
-                          FreeBusyComp,
-                          TimezoneComp,
-                          IanaComp,
-                          XComp>;
+using Component = xvariant<EventComp,
+                           TodoComp,
+                           JournalComp,
+                           FreeBusyComp,
+                           TimezoneComp,
+                           IanaComp,
+                           XComp>;
 
 struct Calendar {
         CalProps properties;
