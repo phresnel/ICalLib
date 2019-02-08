@@ -92,6 +92,22 @@ public:
                 return *this;
         }
 };
+
+template <class Visitor, typename ...XVariants>
+// TODO: Needs enable_if upon xvariant
+auto visit(Visitor&& vis, XVariants&& ...xvars) -> void {
+        using variant = variant<Types...>;
+
+        using std::visit;
+
+        // TODO: Either cast, or copy to a fresh std::variant
+
+        /*std::visit(
+                vis,
+        );*/
+        // TODO: Proper return [type]
+}
+
 template<typename T, typename ...VTypes>
 inline
 optional<T> get_opt(xvariant<VTypes...> const &v) {

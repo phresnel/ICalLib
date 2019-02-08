@@ -41,8 +41,7 @@ std::ostream& operator<<(std::ostream& os, CalProps const& v) {
 
 std::ostream& operator<<(std::ostream& os, Component const& v) {
         if (auto p = get_opt<EventComp>(v)) {
-                return os << "event-comp\n";
-                //return os << *p;
+                return os << *p;
         }
         if (auto p = get_opt<TodoComp>(v)) {
                 return os << "todo-comp\n";
@@ -114,5 +113,23 @@ std::ostream& operator<<(std::ostream& os, XProp const &v) {
 
 std::ostream& operator<<(std::ostream& os, IanaProp const &v) {
         os << "<IanaProp>\n";
+        return os;
+}
+
+
+template <typename ...Types>
+std::ostream& operator<<(std::ostream &os, xvariant<Types...> const &v) {
+        xvariant<Types...> b;
+        visit([&os](auto&& v) {
+                //os << v;
+        }, b);
+        return os;
+}
+
+std::ostream& operator<<(std::ostream& os, EventComp const &v) {
+        os << "      Event:\n";
+        for (auto const &prop : v.properties) {
+                os << "        " << prop << '\n';
+        }
         return os;
 }

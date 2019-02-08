@@ -309,4 +309,6 @@ std::ostream& operator<<(std::ostream& os, Method const &);
 std::ostream& operator<<(std::ostream& os, XProp const &);
 std::ostream& operator<<(std::ostream& os, IanaProp const &);
 
+std::ostream& operator<<(std::ostream& os, EventComp const &);
+
 #endif //ICAL_HH_INCLUDED_20190130
