@@ -1,6 +1,7 @@
 
 #include "parser.hh"
 #include "parser_helpers.hh"
+#include "icalstream.hh"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -27,7 +28,7 @@ void read_file(std::string const &filename) {
 }
 
 int main() {
-        //read_file("dev-assets/f1calendar.com/2019_full.ics");
-        read_file("dev-assets/mini1.ics");
+        read_file("dev-assets/f1calendar.com/2019_full.ics");
+        //read_file("dev-assets/mini1.ics");
         return 0;
 }
