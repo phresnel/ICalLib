@@ -87,31 +87,19 @@ public:
 };
 
 
-/*
-template <class Visitor, typename ...Types>
-void xvisit (Visitor vis, xvariant<Types...> const & xvar) {
-        std::cerr << "  visit-single" << std::endl;
-}
- */
+// Just a temporary, not fully conformant forwarder to std::visit.
+template <typename Visitor, typename ...Types>
+void visit(Visitor&& visitor, xvariant<Types...> const &v) {
+        using std::visit;
+        using variant_t = const variant<Types...>;
+        using xvariant_t = const xvariant<Types...>;
 
-/*
-template <class Visitor, typename Head, typename ...Tail>
-auto visit(Visitor&& vis, Head &&head, Tail&& ...tail) -> void {
-        std::cerr << "visit-head:" << std::endl;
-        //visit(vis, head);
-        std::cerr << "visit-tail" << std::endl;
-        //visit(vis, tail);
-        // TODO: Proper return [type]
+        visit(
+                std::forward<Visitor>(visitor),
+                //static_cast<variant_type*>(&std::forward<xvariant_t>(v))
+                std::forward<variant_t>(v)
+        );
 }
-
-template<typename T, typename ...VTypes>
-inline
-optional<T> get_opt(xvariant<VTypes...> const &v) {
-        auto p = get_if<T>(&v);
-        if (!p) return nullopt;
-        return *p;
-}
-*/
 
 template<typename T, typename ...VTypes>
 inline

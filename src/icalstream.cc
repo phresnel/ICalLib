@@ -118,10 +118,10 @@ std::ostream& operator<<(std::ostream& os, IanaProp const &v) {
 
 template <typename ...Types>
 std::ostream& operator<<(std::ostream &os, xvariant<Types...> const &v) {
-        auto t = *static_cast<const variant<Types...>*>(&v);
-        std::visit([&os](auto &&v){
+        using std::visit;
+        visit([&os](auto &&v){
                 os << v;
-        }, t);
+        }, v);
         return os;
 }
 
