@@ -10,6 +10,7 @@ add_executable(
         include/xvariant.hh
 
         include/ical.hh           src/ical.cc
+        include/icalstream.hh     src/icalstream.cc
         include/parser.hh         src/parser.cc
         include/parser_helpers.hh src/parser_helpers.cc
         include/rfc3986.hh        src/rfc3986.cc

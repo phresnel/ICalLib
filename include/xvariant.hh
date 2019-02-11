@@ -1,6 +1,8 @@
 #ifndef XVARIANT_HH_INCLUDED_20190208
 #define XVARIANT_HH_INCLUDED_20190208
 
+#include <iostream>
+
 #include <variant>
 #include <utility>
 
@@ -17,23 +19,14 @@ class xvariant : public variant<Types...> {
 public:
         using variant = variant<Types...>;
 
-        constexpr
-        xvariant()
-                : variant()
-        {}
-
+        constexpr xvariant() : variant() {}
         constexpr xvariant(const xvariant& other) : variant(other) {}
-
-        constexpr xvariant(xvariant&& other)
-                : variant(other)
-        {}
+        constexpr xvariant(xvariant&& other) : variant(other) {}
 
         template <class T>
         constexpr
         explicit // <-- this is the one and only reason xvariant exists.
-        xvariant(T&& t)
-                : variant(std::forward<T>(t))
-        {}
+        xvariant(T&& t) : variant(std::forward<T>(t)) {}
 
         template <class T, class ...Args>
         constexpr
@@ -93,18 +86,21 @@ public:
         }
 };
 
-template <class Visitor, typename ...XVariants>
-// TODO: Needs enable_if upon xvariant
-auto visit(Visitor&& vis, XVariants&& ...xvars) -> void {
-        using variant = variant<Types...>;
 
-        using std::visit;
+/*
+template <class Visitor, typename ...Types>
+void xvisit (Visitor vis, xvariant<Types...> const & xvar) {
+        std::cerr << "  visit-single" << std::endl;
+}
+ */
 
-        // TODO: Either cast, or copy to a fresh std::variant
-
-        /*std::visit(
-                vis,
-        );*/
+/*
+template <class Visitor, typename Head, typename ...Tail>
+auto visit(Visitor&& vis, Head &&head, Tail&& ...tail) -> void {
+        std::cerr << "visit-head:" << std::endl;
+        //visit(vis, head);
+        std::cerr << "visit-tail" << std::endl;
+        //visit(vis, tail);
         // TODO: Proper return [type]
 }
 
@@ -115,6 +111,7 @@ optional<T> get_opt(xvariant<VTypes...> const &v) {
         if (!p) return nullopt;
         return *p;
 }
+*/
 
 template<typename T, typename ...VTypes>
 inline
