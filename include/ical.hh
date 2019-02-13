@@ -27,6 +27,7 @@ using std::make_tuple;
 // mixins
 struct having_string_name { string name; };
 struct having_string_value { string value; };
+struct having_integer_value { int value; };
 template <typename T> struct having_value { T value; };
 struct having_string_values { vector<string> values; };
 struct having_uri_values { vector<Uri> values; };
@@ -48,9 +49,6 @@ struct Version : having_other_params, having_string_value {
 };
 
 struct ContentLine :  having_string_name, having_string_value, having_params {};
-
-struct Alarm {
-};
 
 struct CalScale :  having_string_value, having_other_params { };
 struct Method : having_other_params, having_string_value  {};
@@ -206,7 +204,10 @@ struct Organizer {
         Uri address;
 };
 struct Priority {};
-struct Seq {};
+struct SeqParams : having_other_params { };
+struct Seq : having_integer_value {
+        SeqParams params;
+};
 struct Status {};
 struct SummParams : having_other_params {
         optional<AltRepParam> alt_rep;
@@ -222,7 +223,12 @@ struct RRule {};
 struct Duration {};
 struct Attach {};
 struct Attendee {};
-struct Categories {};
+struct CatParams : having_other_params {
+        optional<LanguageParam> language;
+};
+struct Categories : having_string_values {
+        CatParams params;
+};
 struct Comment {};
 struct Contact {};
 struct ExDate {};
@@ -234,9 +240,96 @@ struct XProp :
         having_string_name,
         having_string_value
 {
-        vector<ICalParameter> params;
+vector<ICalParameter> params;
 };
+
+struct DurSecond {
+        string second;
+};
+struct DurMinute {
+        string minute;
+        optional<DurSecond> second;
+};
+struct DurHour {
+        string hour;
+        optional<DurMinute> minute;
+};
+struct DurDay : having_string_value {};
+
+using DurTime = xvariant<DurHour, DurMinute, DurSecond>;
+struct DurDate {
+        DurDay day;
+        optional<DurTime> time;
+};
+struct DurWeek {};
+
+struct DurValue {
+        bool positive = true;
+        xvariant<DurDate, DurTime, DurWeek> value;
+};
+struct ActionParam : having_other_params {};
+struct Action : having_string_value {
+        ActionParam params;
+};
+struct TrigRel : having_other_params {
+        string value;
+        DurValue durValue;
+        TrigRelParam trigRelParam;
+};
+
+struct TrigAbs : having_other_params {
+        string value;
+        DateTime dateTime;
+};
+using Trigger = xvariant<TrigRel, TrigAbs>;
+
+struct RepParam : having_other_params {};
+struct Repeat : having_integer_value {
+        RepParam params;
+};
+
 struct IanaProp {};
+
+struct AudioProp {
+        Action action;
+        Trigger trigger;
+
+        optional<Duration> duration;
+        optional<Repeat> repeat;
+
+        optional<Attach> attach;
+
+        vector<XProp> xProps;
+        vector<IanaProp> ianaProps;
+
+};
+struct DispProp {
+        Action action;
+        Description description;
+        Trigger trigger;
+
+        optional<Duration> duration;
+        optional<Repeat> repeat;
+
+        vector<XProp> xProps;
+        vector<IanaProp> ianaProps;
+};
+struct EmailProp {
+        Action action;
+        Description description;
+        Trigger trigger;
+        Trigger summary;
+
+        Attendee attendee;
+
+        optional<Duration> duration;
+        optional<Repeat> repeat;
+
+        vector<Attach> attach;
+        vector<XProp> xProps;
+        vector<IanaProp> ianaProps;
+};
+using Alarm = xvariant<AudioProp, DispProp, EmailProp>;
 
 using EventProp = xvariant<DtStamp,
                            Uid,
