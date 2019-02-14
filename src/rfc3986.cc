@@ -699,5 +699,11 @@ optional<string> read_relative_ref(std::istream &is) {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
+
+
+std::ostream& operator<<(std::ostream& os, Uri const &v) {
+        return os << to_string(v);
+}
+
 }
 

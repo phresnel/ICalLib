@@ -51,4 +51,8 @@ std::ostream& operator<<(std::ostream& os, Related const &v);
 std::ostream& operator<<(std::ostream& os, Resources const &v);
 std::ostream& operator<<(std::ostream& os, RDate const &v);
 
+std::ostream& operator<<(std::ostream& os, Date const &v);
+std::ostream& operator<<(std::ostream& os, Time const &v);
+std::ostream& operator<<(std::ostream& os, DateTime const &v);
+
 #endif //ICALSTREAM_HH_INCLUDED_20190211

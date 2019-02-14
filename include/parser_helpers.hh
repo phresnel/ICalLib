@@ -30,6 +30,7 @@ public:
                 Entry& operator= (Entry &&other) {
                         entries_ = other.entries_;
                         other.entries_ = nullptr;
+                        return *this;
                 }
 
                 Entry(std::vector<const char*> &entries, const char *what)

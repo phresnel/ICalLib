@@ -28,8 +28,15 @@ include_directories(include/)
 ## -- dev-assets/ --------------------------------------------------------------
 set(ASSET_FOLDER dev-assets)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/)
-configure_file("${ASSET_FOLDER}/mini1.ics" ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/ COPYONLY)
+configure_file("${ASSET_FOLDER}/mini1.ics"
+               ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/
+               COPYONLY)
 ## -- dev-assets/f1calendar.com/ -----------------------------------------------
 set(ASSET_FOLDER dev-assets/f1calendar.com)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/)
-configure_file("${ASSET_FOLDER}/2019_full.ics" ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/ COPYONLY)
+configure_file("${ASSET_FOLDER}/2019_full.ics"
+               ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/
+               COPYONLY)
+configure_file("${ASSET_FOLDER}/2019_full.ics.indented.txt"
+               ${CMAKE_BINARY_DIR}/${ASSET_FOLDER}/
+               COPYONLY)

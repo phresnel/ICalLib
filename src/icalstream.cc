@@ -134,19 +134,19 @@ std::ostream& operator<<(std::ostream& os, EventComp const &v) {
 }
 
 std::ostream& operator<<(std::ostream& os, DtStamp const &v) {
-        return os << "<DtStamp>";
+        return os << "DtStamp:" << v.date_time;
 }
 
 std::ostream& operator<<(std::ostream& os, DtStart const &v) {
-        return os << "<DtStart>";
+        return os << "DtStart:" << v.value;
 }
 
 std::ostream& operator<<(std::ostream& os, DtEnd const &v) {
-        return os << "<DtEnd>";
+        return os << "DtEnd:" << v.value;
 }
 
 std::ostream& operator<<(std::ostream& os, Uid const &v) {
-        return os << "<Uid>";
+        return os << "Uid:" << v.value;
 }
 
 std::ostream& operator<<(std::ostream& os, Class const &v) {
@@ -170,11 +170,11 @@ std::ostream& operator<<(std::ostream& os, LastMod const &v) {
 }
 
 std::ostream& operator<<(std::ostream& os, Location const &v) {
-        return os << "<Location>";
+        return os << "Location:" << v.value;
 }
 
 std::ostream& operator<<(std::ostream& os, Organizer const &v) {
-        return os << "<Organizer>";
+        return os << "Organizer:" << v.address;
 }
 
 std::ostream& operator<<(std::ostream& os, Priority const &v) {
@@ -190,7 +190,7 @@ std::ostream& operator<<(std::ostream& os, Status const &v) {
 }
 
 std::ostream& operator<<(std::ostream& os, Summary const &v) {
-        return os << "<Summary>";
+        return os << "Summary:" << v.value;
 }
 
 std::ostream& operator<<(std::ostream& os, Transp const &v) {
@@ -251,4 +251,16 @@ std::ostream& operator<<(std::ostream& os, Resources const &v) {
 
 std::ostream& operator<<(std::ostream& os, RDate const &v) {
         return os << "<RDate>";
+}
+
+std::ostream& operator<<(std::ostream& os, Date const &v) {
+        return os << v.year << "-" << v.month << "-" << v.day;
+}
+
+std::ostream& operator<<(std::ostream& os, Time const &v) {
+        return os << v.hour << ":" << v.minute << ":" << v.second;
+}
+
+std::ostream& operator<<(std::ostream& os, DateTime const &v) {
+        return os << v.date << "T" << v.time;
 }

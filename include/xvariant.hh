@@ -21,7 +21,8 @@ public:
 
         constexpr xvariant() : variant() {}
         constexpr xvariant(const xvariant& other) : variant(other) {}
-        constexpr xvariant(xvariant&& other) : variant(other) {}
+        constexpr xvariant(xvariant&& other) :
+                variant(std::forward<xvariant>(other)) {}
 
         template <class T>
         constexpr
@@ -71,7 +72,7 @@ public:
 
         constexpr
         xvariant& operator=(xvariant&& rhs)
-        noexcept(noexcept(variant::operator= (rhs)))
+        //noexcept(noexcept(variant::operator= (rhs)))
         {
                 variant::operator= (rhs);
                 return *this;
@@ -79,7 +80,7 @@ public:
 
         template <class T>
         xvariant& operator=(T&& rhs)
-        noexcept(noexcept(variant::operator= (std::forward<T>(rhs))))
+        //noexcept(noexcept(variant::operator= (std::forward<T>(T()))))
         {
                 variant::operator= (std::forward<T>(rhs));
                 return *this;

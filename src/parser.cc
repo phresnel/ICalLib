@@ -1449,11 +1449,17 @@ optional<AudioProp> read_audioprop(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         AudioProp ret;
+
+        bool req_act = false, req_trig = false;
         while(true) {
-                if (auto v = read_action(is))
+                if (auto v = read_action(is)) {
+                        req_act = true;
                         ret.action = *v;
-                else if (auto v = read_trigger(is))
+                }
+                else if (auto v = read_trigger(is)) {
+                        req_trig = true;
                         ret.trigger = *v;
+                }
                 else if (auto v = read_duration(is))
                         ret.duration = *v;
                 else if (auto v = read_repeat(is))
@@ -1465,6 +1471,12 @@ optional<AudioProp> read_audioprop(istream &is) {
                 else if (auto v = read_iana_prop(is))
                         ret.ianaProps.push_back(*v);
                 else break;
+        }
+        // std::cerr << "read_audioprop:" << std::endl;
+        // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
+        // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
+        if (!(req_act && req_trig)) {
+                return nullopt;
         }
         ptran.commit();
         return ret;
@@ -1492,10 +1504,21 @@ optional<DispProp> read_dispprop(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         DispProp ret;
+
+        bool req_act = false, req_desc = false, req_trig = false;
         while(true) {
-                if (auto v = read_action(is)) ret.action = *v;
-                else if (auto v = read_description(is)) ret.description = *v;
-                else if (auto v = read_trigger(is)) ret.trigger = *v;
+                if (auto v = read_action(is)) {
+                        req_act = true;
+                        ret.action = *v;
+                }
+                else if (auto v = read_description(is)) {
+                        req_desc = true;
+                        ret.description = *v;
+                }
+                else if (auto v = read_trigger(is)) {
+                        req_trig = true;
+                        ret.trigger = *v;
+                }
 
                 else if (auto v = read_duration(is)) ret.duration = *v;
                 else if (auto v = read_repeat(is)) ret.repeat = *v;
@@ -1504,6 +1527,14 @@ optional<DispProp> read_dispprop(istream &is) {
                 else if (auto v = read_iana_prop(is)) ret.ianaProps.push_back(*v);
 
                 else break;
+        }
+
+        // std::cerr << "read_dispprop:" << std::endl;
+        // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
+        // std::cerr << "  has desc   : " << (req_desc?"yes":"no") << std::endl;
+        // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
+        if (!(req_act && req_desc && req_trig)) {
+                 return nullopt;
         }
 
         ptran.commit();
@@ -1537,11 +1568,28 @@ optional<EmailProp> read_emailprop(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         EmailProp ret;
+
+        bool req_act = false,
+             req_desc = false,
+             req_trig = false,
+             req_summ = false;
         while(true) {
-                if (auto v = read_action(is)) ret.action = *v;
-                else if (auto v = read_description(is)) ret.description = *v;
-                else if (auto v = read_trigger(is)) ret.trigger = *v;
-                else if (auto v = read_summary(is)) ret.summary = *v;
+                if (auto v = read_action(is)) {
+                        req_act = true;
+                        ret.action = *v;
+                }
+                else if (auto v = read_description(is)) {
+                        req_desc = true;
+                        ret.description = *v;
+                }
+                else if (auto v = read_trigger(is)) {
+                        req_trig = true;
+                        ret.trigger = *v;
+                }
+                else if (auto v = read_summary(is)) {
+                        req_summ = true;
+                        ret.summary = *v;
+                }
 
                 else if (auto v = read_attendee(is)) ret.attendee = *v;
 
@@ -1553,6 +1601,15 @@ optional<EmailProp> read_emailprop(istream &is) {
                 else if (auto v = read_iana_prop(is)) ret.ianaProps.push_back(*v);
 
                 else break;
+        }
+
+        // std::cerr << "read_emailprop:" << std::endl;
+        // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
+        // std::cerr << "  has desc   : " << (req_desc?"yes":"no") << std::endl;
+        // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
+        // std::cerr << "  has summ   : " << (req_summ?"yes":"no") << std::endl;
+        if (!(req_act && req_desc && req_trig && req_summ)) {
+                return nullopt;
         }
 
         ptran.commit();
@@ -1569,9 +1626,13 @@ optional<Alarm> read_alarmc(istream &is) {
 
         if (!read_key_value(is, "BEGIN", "VALARM")) return nullopt;
 
-        if (auto v = read_audioprop(is)) ret = *v;
+        // Compared to the grammar, we invert the checking-order
+        // because the required fields overlap, so we check for most
+        // specialized first.
+
+        if (auto v = read_emailprop(is)) ret = *v;
         else if (auto v = read_dispprop(is)) ret = *v;
-        else if (auto v = read_emailprop(is)) ret = *v;
+        else if (auto v = read_audioprop(is)) ret = *v;
         else return nullopt; // TODO: Error, not empty
 
         if (!read_key_value(is, "END", "VALARM"))
@@ -1691,16 +1752,18 @@ optional<DateTime> read_date_time(istream &is) {
 }
 
 //       dur-week   = 1*DIGIT "W"
-bool read_dur_week(istream &is) {
+optional<DurWeek> read_dur_week(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                read_digits(is, 1) &&
-                read_token(is, "W");
-        if (!success)
-                return false;
+        DurWeek ret;
+
+        if (auto v = read_digits(is, 1, -1)) ret.value = *v;
+        else return nullopt;
+
+        if (!read_token(is, "W")) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       dur-second = 1*DIGIT "S"
@@ -1709,7 +1772,8 @@ optional<DurSecond> read_dur_second(istream &is) {
         save_input_pos ptran(is);
         DurSecond ret;
 
-        if (auto v = read_digits(is, 1)) ret.second = *v;
+        if (auto v = read_digits(is, 1, -1)) ret.second = *v;
+        else return nullopt;
 
         if (!read_token(is, "S")) return nullopt;
 
@@ -1723,7 +1787,8 @@ optional<DurMinute> read_dur_minute(istream &is) {
         save_input_pos ptran(is);
         DurMinute ret;
 
-        if (auto v = read_digits(is, 1)) ret.minute = *v;
+        if (auto v = read_digits(is, 1, -1)) ret.minute = *v;
+        else return nullopt;
 
         if (!read_token(is, "M")) return nullopt;
 
@@ -1739,10 +1804,10 @@ optional<DurHour> read_dur_hour(istream &is) {
         save_input_pos ptran(is);
         DurHour ret;
 
-        if (auto v = read_digits(is, 1)) ret.hour = *v;
+        if (auto v = read_digits(is, 1, -1)) ret.hour = *v;
         else return nullopt;
 
-        if (read_token(is, "H")) return nullopt;
+        if (!read_token(is, "H")) return nullopt;
 
         if (auto v = read_dur_minute(is)) ret.minute = *v;
 
@@ -1756,7 +1821,7 @@ optional<DurDay> read_dur_day(istream &is) {
         save_input_pos ptran(is);
         DurDay ret;
 
-        if (auto v = read_digits(is, 1)) ret.value += *v;
+        if (auto v = read_digits(is, 1, -1)) ret.value += *v;
         else return nullopt;
 
         if (!read_token(is, "D")) return nullopt;
@@ -1768,12 +1833,25 @@ optional<DurDay> read_dur_day(istream &is) {
 //       dur-time   = "T" (dur-hour / dur-minute / dur-second)
 optional<DurTime> read_dur_time(istream &is) {
         CALLSTACK;
+        save_input_pos ptran(is);
+        DurTime ret;
+
         if (!read_token(is, "T")) return nullopt;
 
-        if (auto v = read_dur_hour(is)) return *v;
-        else if (auto v = read_dur_minute(is)) return *v;
-        else if (auto v = read_dur_second(is)) return *v;
-        else return nullopt;
+        if (auto v = read_dur_hour(is)) {
+                ret = *v;
+        }
+        else if (auto v = read_dur_minute(is)) {
+                ret = *v;
+        }
+        else if (auto v = read_dur_second(is)) {
+                ret = *v;
+        }
+        else {
+                return nullopt;
+        }
+        ptran.commit();
+        return ret;
 }
 
 //       dur-date   = dur-day [dur-time]
@@ -1802,9 +1880,15 @@ optional<DurValue> read_dur_value(istream &is) {
 
         if (!read_token(is, "P")) return nullopt; // error
 
-        if (auto v = read_dur_date(is)) ret.value = *v;
-        else if (auto v = read_dur_time(is)) ret.value = *v;
-        else if (auto v = read_dur_week(is)) ret.value = *v;
+        if (auto v = read_dur_date(is)) {
+                ret.value = *v;
+        }
+        else if (auto v = read_dur_time(is)) {
+                ret.value = *v;
+        }
+        else if (auto v = read_dur_week(is)) {
+                ret.value = *v;
+        }
         else return nullopt; // error
 
         ptran.commit();
@@ -2122,8 +2206,8 @@ optional<Description> read_description(istream &is) {
         CALLSTACK;
         save_input_pos ptran(is);
         Description ret;
-        if (!read_token(is, "DESCRIPTION"))
-                return nullopt;
+
+        if (!read_token(is, "DESCRIPTION")) return nullopt;
 
         if (auto v = read_descparam(is)) ret.params = *v;
         else return nullopt;
@@ -4858,11 +4942,8 @@ optional<ValueTypeParam> read_valuetypeparam(istream &is) {
         if (!read_token(is, "VALUE")) return nullopt;
         if (!read_token(is, "=")) return nullopt;
 
-        if (auto v = read_valuetype(is)) {
-                ret.value = *v;
-        } else {
-                return nullopt;
-        }
+        if (auto v = read_valuetype(is)) ret.value = *v;
+        else return nullopt;
 
         ptran.commit();
         return ret;
@@ -4875,21 +4956,14 @@ optional<IanaParam> read_iana_param(istream &is) {
         save_input_pos ptran(is);
         IanaParam ret;
 
-        if (auto v = read_iana_token(is)) {
-                ret.token = *v;
-        } else {
-                return nullopt;
-        }
+        if (auto v = read_iana_token(is)) ret.token = *v;
+        else return nullopt;
 
-        if (!read_token(is, "="))
-                return nullopt;
+        if (!read_token(is, "=")) return nullopt;
 
         do {
-                if (auto v = read_param_value(is)) {
-                        ret.values.push_back(*v);
-                } else {
-                        return nullopt;
-                }
+                if (auto v = read_param_value(is)) ret.values.push_back(*v);
+                else return nullopt;
         } while (read_token(is, ","));
 
         ptran.commit();
@@ -4903,21 +4977,14 @@ optional<XParam> read_x_param(istream &is) {
         save_input_pos ptran(is);
         XParam ret;
 
-        if (auto v = read_x_name(is)) {
-                ret.name = *v;
-        } else {
-                return nullopt;
-        }
+        if (auto v = read_x_name(is)) ret.name = *v;
+        else return nullopt;
 
-        if (!read_token(is, "="))
-                return nullopt;
+        if (!read_token(is, "=")) return nullopt;
 
         do {
-                if (auto v = read_param_value(is)) {
-                        ret.values.push_back(*v);
-                } else {
-                        return nullopt;
-                }
+                if (auto v = read_param_value(is)) ret.values.push_back(*v);
+                else return nullopt; // error
         } while (read_token(is, ","));
 
         ptran.commit();
@@ -4954,26 +5021,32 @@ ICalParameter expect_icalparameter(istream &is) {
 }
 optional<ICalParameter> read_icalparameter(istream &is) {
         CALLSTACK;
-        if (auto v = read_altrepparam(is)) return ICalParameter{*v};
-        if (auto v = read_cnparam(is)) return ICalParameter{*v};
-        if (auto v = read_cutypeparam(is)) return ICalParameter{*v};
-        if (auto v = read_delfromparam(is)) return ICalParameter{*v};
-        if (auto v = read_deltoparam(is)) return ICalParameter{*v};
-        if (auto v = read_dirparam(is)) return ICalParameter{*v};
-        if (auto v = read_encodingparam(is)) return ICalParameter{*v};
-        if (auto v = read_fmttypeparam(is)) return ICalParameter{*v};
-        if (auto v = read_fbtypeparam(is)) return ICalParameter{*v};
-        if (auto v = read_languageparam(is)) return ICalParameter{*v};
-        if (auto v = read_memberparam(is)) return ICalParameter{*v};
-        if (auto v = read_partstatparam(is)) return ICalParameter{*v};
-        if (auto v = read_rangeparam(is)) return ICalParameter{*v};
-        if (auto v = read_trigrelparam(is)) return ICalParameter{*v};
-        if (auto v = read_reltypeparam(is)) return ICalParameter{*v};
-        if (auto v = read_roleparam(is)) return ICalParameter{*v};
-        if (auto v = read_rsvpparam(is)) return ICalParameter{*v};
-        if (auto v = read_sentbyparam(is)) return ICalParameter{*v};
-        if (auto v = read_tzidparam(is)) return ICalParameter{*v};
-        if (auto v = read_valuetypeparam(is)) return ICalParameter{*v};
-        if (auto v = read_other_param(is)) return ICalParameter{*v};
-        return optional<ICalParameter>();
+        save_input_pos ptran(is);
+        ICalParameter ret;
+
+        if (auto v = read_altrepparam(is)) ret = *v;
+        else if (auto v = read_cnparam(is)) ret = *v;
+        else if (auto v = read_cutypeparam(is)) ret = *v;
+        else if (auto v = read_delfromparam(is)) ret = *v;
+        else if (auto v = read_deltoparam(is)) ret = *v;
+        else if (auto v = read_dirparam(is)) ret = *v;
+        else if (auto v = read_encodingparam(is)) ret = *v;
+        else if (auto v = read_fmttypeparam(is)) ret = *v;
+        else if (auto v = read_fbtypeparam(is)) ret = *v;
+        else if (auto v = read_languageparam(is)) ret = *v;
+        else if (auto v = read_memberparam(is)) ret = *v;
+        else if (auto v = read_partstatparam(is)) ret = *v;
+        else if (auto v = read_rangeparam(is)) ret = *v;
+        else if (auto v = read_trigrelparam(is)) ret = *v;
+        else if (auto v = read_reltypeparam(is)) ret = *v;
+        else if (auto v = read_roleparam(is)) ret = *v;
+        else if (auto v = read_rsvpparam(is)) ret = *v;
+        else if (auto v = read_sentbyparam(is)) ret = *v;
+        else if (auto v = read_tzidparam(is)) ret = *v;
+        else if (auto v = read_valuetypeparam(is)) ret = *v;
+        else if (auto v = read_other_param(is)) ret = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
 }

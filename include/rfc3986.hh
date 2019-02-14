@@ -79,6 +79,8 @@ optional<Uri> read_URI(std::istream &is);
 optional<string> read_absolute_URI(std::istream &is);
 optional<string> read_relative_ref(std::istream &is);
 
+std::ostream& operator<<(std::ostream& os, Uri const &v);
+
 }
 
 #endif //RFC3986_HH_INCLUDED_20190201

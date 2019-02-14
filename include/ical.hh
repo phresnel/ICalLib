@@ -261,7 +261,7 @@ struct DurDate {
         DurDay day;
         optional<DurTime> time;
 };
-struct DurWeek {};
+struct DurWeek : having_string_value {};
 
 struct DurValue {
         bool positive = true;
@@ -318,7 +318,7 @@ struct EmailProp {
         Action action;
         Description description;
         Trigger trigger;
-        Trigger summary;
+        Summary summary;
 
         Attendee attendee;
 
