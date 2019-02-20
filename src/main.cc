@@ -1,6 +1,6 @@
 
-#include "parser.hh"
-#include "parser_helpers.hh"
+#include "IcalParser.hh"
+#include "parser_exceptions.hh"
 #include "icalstream.hh"
 #include <fstream>
 #include <iostream>
@@ -14,7 +14,8 @@ void read_file(std::string const &filename) {
         }
         //std::stringstream ss; ss << f.rdbuf();
         try {
-                auto ical = expect_ical(f);
+                IcalParser parser(f);
+                auto ical = parser.expect_ical();
                 std::cout << ical << std::endl;
         } catch (syntax_error &e) {
                 std::cerr << "syntax-error:" << e.what();

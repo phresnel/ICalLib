@@ -3,22 +3,291 @@
 #include "rfc4288.hh"
 #include "rfc5234.hh"
 #include "rfc5646.hh"
-#include "parser.hh"
+#include "IcalParser.hh"
 #include "parser_helpers.hh"
+#include "parser_exceptions.hh"
 
-// -- Parser helpers specific to ICal, but generic within ICal. ----------------
-tuple<string, string> expect_key_value(
-        istream &is,
+string IcalParser::expect_token(string const &tok) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        for (auto &c : tok) {
+                const auto i = is.get();
+                if(i == EOF) {
+                        throw unexpected_token(is.tellg(), tok);
+                }
+                if(i != c) {
+                        throw syntax_error(is.tellg(), tok);
+                }
+        }
+        ptran.commit();
+        return tok;
+}
+
+optional<string> IcalParser::token(string const &tok) {
+        CALLSTACK;
+        try {
+                return expect_token(tok);
+        } catch(syntax_error &) {
+                return nullopt;
+        }
+}
+
+optional<string> IcalParser::eof() {
+        save_input_pos ptran(is);
+        const auto c = is.get();
+        if (c != EOF)
+                return nullopt;
+        ptran.commit();
+        return string() + (char)c;
+}
+
+string IcalParser::expect_newline() {
+        CALLSTACK;
+        // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
+
+        std::istream::sentry se(is, true);
+        std::streambuf* sb = is.rdbuf();
+
+        switch (sb->sgetc()) {
+        case '\n':
+                sb->sbumpc();
+                return "\n";
+        case '\r':
+                sb->sbumpc();
+                if (sb->sgetc() == '\n') {
+                        sb->sbumpc();
+                        return "\r\n";
+                }
+                return "\r";
+        case std::streambuf::traits_type::eof():
+                is.setstate(std::ios::eofbit);
+                return "";
+        };
+        throw unexpected_token(is.tellg());
+}
+
+optional<string> IcalParser::newline() {
+        CALLSTACK;
+        try {
+                return expect_newline();
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+optional<string> IcalParser::hex() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto i = is.get();
+        switch(i) {
+        default:
+        case EOF:
+                return nullopt;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case 'a':
+        case 'A':
+        case 'b':
+        case 'B':
+        case 'c':
+        case 'C':
+        case 'd':
+        case 'D':
+        case 'e':
+        case 'E':
+        case 'f':
+        case 'F':
+                break;
+        }
+
+        ptran.commit();
+        return string() + (char)i;
+}
+
+string IcalParser::expect_alpha() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto i = is.get();
+        switch(i) {
+        default:
+        case EOF:
+                throw syntax_error(is.tellg());
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+                break;
+        }
+        ptran.commit();
+        return string() + (char)i;
+}
+
+optional<string> IcalParser::alpha() {
+        CALLSTACK;
+        try {
+                return expect_alpha();
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+
+string IcalParser::expect_digit() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto i = is.get();
+        if (i<'0' || i>'9')
+                throw syntax_error(is.tellg(), "expected digit");
+        ptran.commit();
+        return string() + (char)i;
+}
+
+string IcalParser::expect_digit(int min, int max) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        const auto i = is.get();
+        if (i<'0'+min || i>'0'+max)
+                throw syntax_error(is.tellg(),
+                                   "expected digit in range [" +
+                                   std::to_string(min) + ".." +
+                                   std::to_string(max) + "]");
+        ptran.commit();
+        return string() + (char)i;
+}
+
+optional<string> IcalParser::digit() {
+        CALLSTACK;
+        try {
+                return expect_digit();
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+optional<string> IcalParser::digit(int min, int max) {
+        CALLSTACK;
+        try {
+                return expect_digit(min, max);
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+optional<string> IcalParser::digits(int at_least, int at_most) {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        int c = 0;
+        string ret;
+        optional<string> tmp;
+        while ((at_most<0 || c<at_most) && (tmp=digit())) {
+                ++c;
+                ret += *tmp;
+        }
+
+        if (at_least >= 0 && c<at_least)
+                return nullopt;
+        if (at_most >= 0 && c>at_most)
+                return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+optional<string> IcalParser::digits(int num) {
+        CALLSTACK;
+        return digits(num, num);
+}
+
+string IcalParser::expect_alnum() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        if (auto v = alpha()) {
+                ptran.commit();
+                return *v;
+        } else if (auto v = digit()) {
+                ptran.commit();
+                return *v;
+        }
+        throw syntax_error(is.tellg(), "expected alpha or digit");
+}
+
+optional<string> IcalParser::alnum() {
+        CALLSTACK;
+        try {
+                return expect_alnum();
+        } catch (syntax_error &) {
+                return nullopt;
+        }
+}
+
+
+tuple<string, string> IcalParser::expect_key_value(
         string const &k,
         string const &v
 ) {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, k) &&
-                read_token(is, ":") &&
-                read_token(is, v) &&
-                read_newline(is);
+                token(k) &&
+                token(":") &&
+                token(v) &&
+                newline();
         if (!success) {
                 throw key_value_pair_expected(is.tellg(), k, v);
         }
@@ -26,12 +295,13 @@ tuple<string, string> expect_key_value(
         return {k, v};
 }
 
-optional<tuple<string, string>> read_key_value(
-        istream &is, string const &k, string const &v
+optional<tuple<string, string>> IcalParser::key_value(
+        string const &k,
+        string const &v
 ) {
         CALLSTACK;
         try {
-                return expect_key_value(is, k, v);
+                return expect_key_value(k, v);
         } catch (syntax_error &) {
                 return nullopt;
         }
@@ -72,89 +342,89 @@ optional<tuple<string, string>> read_key_value(
 //     ; the folding procedure described above.
 
 //    contentline   = name *(";" param ) ":" value CRLF
-ContentLine expect_contentline(istream &is) {
+ContentLine IcalParser::expect_contentline() {
         CALLSTACK;
-        save_input_pos ts(is);
+        save_input_pos ptran(is);
         ContentLine ret;
-        ret.name = expect_name(is);
-        while (read_token(is, ";")) {
-                ret.params.push_back(expect_param(is));
+        ret.name = expect_name();
+        while (token(";")) {
+                ret.params.push_back(expect_param());
         }
-        expect_token(is, ":");
-        ret.value = expect_value(is);
-        expect_newline(is);
-        ts.commit();
+        expect_token(":");
+        ret.value = expect_value();
+        expect_newline();
+        ptran.commit();
         return ret;
 }
-optional<ContentLine> read_contentline(istream &is) {
+optional<ContentLine> IcalParser::contentline() {
         CALLSTACK;
         try {
-                return expect_contentline(is);
+                return expect_contentline();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //     name          = iana-token / x-name
-string expect_name(istream &is) {
+string IcalParser::expect_name() {
         CALLSTACK;
-        if (auto v = read_iana_token(is))
+        if (auto v = iana_token())
                 return *v;
-        if (auto v = read_x_name(is))
+        if (auto v = x_name())
                 return *v;
         throw syntax_error(is.tellg(), "expected iana-token or x-name");
 }
 
 //     iana-token    = 1*(ALPHA / DIGIT / "-")
 //     ; iCalendar identifier registered with IANA
-optional<string> read_iana_token_char(istream &is) {
+optional<string> IcalParser::iana_token_char() {
         CALLSTACK;
-        if (auto v = read_alnum(is)) return *v;
-        if (auto v = read_token(is, "-")) return *v;
+        if (auto v = alnum()) return *v;
+        if (auto v = token("-")) return *v;
         return nullopt;
 }
-optional<string> read_iana_token(istream &is) {
+optional<string> IcalParser::iana_token() {
         CALLSTACK;
         string ret;
-        if (auto c = read_iana_token_char(is)) {
+        if (auto c = iana_token_char()) {
                 ret += *c;
         } else {
                 return nullopt;
         }
-        while (auto c = read_iana_token_char(is))
+        while (auto c = iana_token_char())
                 ret += *c;
         // TODO: IANA iCalendar identifiers
         return ret;
 }
-string expect_iana_token(istream &is) {
+string IcalParser::expect_iana_token() {
         CALLSTACK;
-        if (auto v = read_iana_token(is))
+        if (auto v = iana_token())
                 return *v;
         throw unexpected_token(is.tellg());
 }
 
 //     vendorid      = 3*(ALPHA / DIGIT)
 //     ; Vendor identification
-string expect_vendorid(istream &is) {
+string IcalParser::expect_vendorid() {
         CALLSTACK;
         save_input_pos ptran(is);
 
         string ret;
-        ret += expect_alnum(is);
-        ret += expect_alnum(is);
-        ret += expect_alnum(is);
+        ret += expect_alnum();
+        ret += expect_alnum();
+        ret += expect_alnum();
 
-        while (auto v = read_alnum(is)) {
+        while (auto v = alnum()) {
                 ret += *v;
         }
 
         ptran.commit();
         return ret;
 }
-optional<string> read_vendorid(istream &is) {
+optional<string> IcalParser::vendorid() {
         CALLSTACK;
         try {
-                return expect_vendorid(is);
+                return expect_vendorid();
         } catch (syntax_error &) {
                 return nullopt;
         }
@@ -162,7 +432,7 @@ optional<string> read_vendorid(istream &is) {
 
 //     SAFE-CHAR     = WSP / %x21 / %x23-2B / %x2D-39 / %x3C-7E / NON-US-ASCII
 //     ; Any character except CONTROL, DQUOTE, ";", ":", ","
-optional<string> read_safe_char(istream &is) {
+optional<string> IcalParser::safe_char() {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
@@ -277,7 +547,7 @@ optional<string> read_safe_char(istream &is) {
 
 //     VALUE-CHAR    = WSP / %x21-7E / NON-US-ASCII
 //     ; Any textual character
-optional<string> read_value_char(istream &is) {
+optional<string> IcalParser::value_char() {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
@@ -393,7 +663,7 @@ optional<string> read_value_char(istream &is) {
 
 //     QSAFE-CHAR    = WSP / %x21 / %x23-7E / NON-US-ASCII
 //     ; Any character except CONTROL and DQUOTE
-optional<string> read_qsafe_char(istream &is) {
+optional<string> IcalParser::qsafe_char() {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
@@ -509,23 +779,23 @@ optional<string> read_qsafe_char(istream &is) {
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
 //     ; UTF8-2, UTF8-3, and UTF8-4 are defined in [RFC3629]
-optional<string> read_non_us_ascii(istream &is) {
+optional<string> IcalParser::non_us_ascii() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     CONTROL       = %x00-08 / %x0A-1F / %x7F
 //     ; All the controls except HTAB
-optional<string> read_control(istream &is) {
+optional<string> IcalParser::control() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //     value         = *VALUE-CHAR
-string expect_value(istream &is) {
+string IcalParser::expect_value() {
         CALLSTACK;
         string ret;
-        while (auto c = read_value_char(is)) {
+        while (auto c = value_char()) {
                 ret += *c;
         }
         return ret;
@@ -537,32 +807,32 @@ string expect_value(istream &is) {
 //     ; allowed on the property.  Refer to specific properties for
 //     ; precise parameter ABNF.
 //
-Param expect_param(istream &is) {
+Param IcalParser::expect_param() {
         CALLSTACK;
         save_input_pos ptran(is);
         Param ret;
-        ret.name = expect_param_name(is);
-        expect_token(is, "=");
-        ret.values.push_back(expect_param_value(is));
-        while (read_token(is, ","))
-                ret.values.push_back(expect_param_value(is));
+        ret.name = expect_param_name();
+        expect_token("=");
+        ret.values.push_back(expect_param_value());
+        while (token(","))
+                ret.values.push_back(expect_param_value());
         ptran.commit();
         return ret;
 }
 
 //     param-name    = iana-token / x-name
-string expect_param_name(istream &is) {
+string IcalParser::expect_param_name() {
         CALLSTACK;
-        if (auto v = read_iana_token(is))
+        if (auto v = iana_token())
                 return *v;
-        if (auto v = read_x_name(is))
+        if (auto v = x_name())
                 return *v;
         throw syntax_error(is.tellg(), "expected param-name");
 }
 
 
 //     param-value   = paramtext / quoted-string
-optional<string> read_param_value(istream &is) {
+optional<string> IcalParser::param_value() {
         CALLSTACK;
         // NOTE: the testing order of paramtext and quoted-string
         //       as per the RFC is errorful, as paramtext can be
@@ -570,44 +840,44 @@ optional<string> read_param_value(istream &is) {
         //       quoted string, it will never be matched, because paramtext
         //       will successfully return an empty string.
         //       Therefore, we switched it here.
-        if (auto v = read_quoted_string(is))  {
+        if (auto v = quoted_string())  {
                 return *v;
         }
-        if (auto v = read_paramtext(is)) {
+        if (auto v = paramtext()) {
                 return *v;
         }
         return nullopt;
 }
-string expect_param_value(istream &is) {
+string IcalParser::expect_param_value() {
         CALLSTACK;
-        if (auto v = read_param_value(is))
+        if (auto v = param_value())
                 return *v;
         throw syntax_error(is.tellg());
 }
 
 //     paramtext     = *SAFE-CHAR
-optional<string> read_paramtext(istream &is) {
+optional<string> IcalParser::paramtext() {
         CALLSTACK;
         string ret;
-        while (auto v = read_safe_char(is))
+        while (auto v = safe_char())
                 ret += *v;
         return ret;
 }
 
 //     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
-optional<string> read_quoted_string(istream &is) {
+optional<string> IcalParser::quoted_string() {
         CALLSTACK;
         save_input_pos ptran(is);
 
-        if (!read_dquote(is))
+        if (!dquote())
                 return nullopt;
 
         string ret;
-        while (auto v = read_qsafe_char(is)) {
+        while (auto v = qsafe_char()) {
                 ret += *v;
         }
 
-        if (!read_dquote(is))
+        if (!dquote())
                 return nullopt;
 
         ptran.commit();
@@ -626,34 +896,34 @@ optional<string> read_quoted_string(istream &is) {
 //     icalobject = "BEGIN" ":" "VCALENDAR" CRLF
 //                  icalbody
 //                  "END" ":" "VCALENDAR" CRLF
-Calendar expect_ical(istream &is) {
+Calendar IcalParser::expect_ical() {
         CALLSTACK;
         save_input_pos ptran(is);
         Calendar ret;
-        expect_key_value(is, "BEGIN", "VCALENDAR");
-        ret = expect_icalbody(is);
-        expect_key_value(is, "END", "VCALENDAR");
+        expect_key_value("BEGIN", "VCALENDAR");
+        ret = expect_icalbody();
+        expect_key_value("END", "VCALENDAR");
         ptran.commit();
         // TODO: The grammar says that there can be more than 1 icalobject.
         return ret;
 }
 
-optional<Calendar> read_ical(istream &is) {
+optional<Calendar> IcalParser::ical() {
         CALLSTACK;
         try {
-                return expect_ical(is);
+                return expect_ical();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //       icalbody   = calprops component
-Calendar expect_icalbody(istream &is) {
+Calendar IcalParser::expect_icalbody() {
         CALLSTACK;
         save_input_pos ptran(is);
         Calendar ret;
-        ret.properties = expect_calprops(is);
-        ret.components = expect_component(is);
+        ret.properties = expect_calprops();
+        ret.components = expect_component();
         ptran.commit();
         return ret;
 }
@@ -676,7 +946,7 @@ Calendar expect_icalbody(istream &is) {
 //                  x-prop / iana-prop
 //                  ;
 //                  )
-CalProps expect_calprops(istream &is) {
+CalProps IcalParser::expect_calprops() {
         CALLSTACK;
         save_input_pos ptran(is);
         CalProps ret;
@@ -686,18 +956,18 @@ CalProps expect_calprops(istream &is) {
             methodc = 0;
 
         while (true) {
-                if (auto val = read_prodid(is)) {
+                if (auto val = prodid()) {
                         ret.prodId = *val;
                         ++prodidc;
-                } else if (auto val = read_version(is)) {
+                } else if (auto val = version()) {
                         // ret.version = ...
                         ++versionc;
-                } else if (auto val = read_calscale(is)) {
+                } else if (auto val = calscale()) {
                         ++calscalec;
-                } else if (auto val = read_method(is)) {
+                } else if (auto val = method()) {
                         ++methodc;
-                } else if (auto val = read_x_prop(is)) {
-                } else if (auto val = read_iana_prop(is)) {
+                } else if (auto val = x_prop()) {
+                } else if (auto val = iana_prop()) {
                 } else {
                         break;
                 }
@@ -707,56 +977,56 @@ CalProps expect_calprops(istream &is) {
 }
 
 //       prodid     = "PRODID" pidparam ":" pidvalue CRLF
-ProdId expect_prodid(istream &is) {
+ProdId IcalParser::expect_prodid() {
         CALLSTACK;
         save_input_pos ptran(is);
         ProdId ret;
-        expect_token(is, "PRODID");
-        ret.params = expect_pidparam(is);
-        expect_token(is, ":");
-        ret.value = expect_pidvalue(is);
-        expect_newline(is);
+        expect_token("PRODID");
+        ret.params = expect_pidparam();
+        expect_token(":");
+        ret.value = expect_pidvalue();
+        expect_newline();
         ptran.commit();
         return ret;
 }
-optional<ProdId> read_prodid(istream &is) {
+optional<ProdId> IcalParser::prodid() {
         CALLSTACK;
         try {
-                return expect_prodid(is);
+                return expect_prodid();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //       version    = "VERSION" verparam ":" vervalue CRLF
-Version expect_version(istream &is) {
+Version IcalParser::expect_version() {
         CALLSTACK;
         save_input_pos ptran(is);
         Version ret;
-        expect_token(is, "VERSION");
-        ret.params = expect_verparam(is);
-        expect_token(is, ":");
-        ret.value = expect_vervalue(is);
-        expect_newline(is);
+        expect_token("VERSION");
+        ret.params = expect_verparam();
+        expect_token(":");
+        ret.value = expect_vervalue();
+        expect_newline();
         ptran.commit();
         return ret;
 }
-optional<Version> read_version(istream &is) {
+optional<Version> IcalParser::version() {
         CALLSTACK;
         try {
-                return expect_version(is);
+                return expect_version();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //       verparam   = *(";" other-param)
-std::vector<OtherParam> expect_verparam(istream &is) {
+std::vector<OtherParam> IcalParser::expect_verparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         std::vector<OtherParam> ret;
-        while(read_token(is, ";")) {
-                ret.push_back(expect_other_param(is));
+        while(token(";")) {
+                ret.push_back(expect_other_param());
         }
         ptran.commit();
         return ret;
@@ -771,108 +1041,108 @@ std::vector<OtherParam> expect_verparam(istream &is) {
 //
 //       maxver     = <A IANA-registered iCalendar version identifier>
 //       ;Maximum iCalendar version needed to parse the iCalendar object.
-string expect_vervalue(istream &is) {
+string IcalParser::expect_vervalue() {
         CALLSTACK;
-        return expect_text(is);
+        return expect_text();
 }
 
 //       calscale   = "CALSCALE" calparam ":" calvalue CRLF
-CalScale expect_calscale(istream &is) {
+CalScale IcalParser::expect_calscale() {
         CALLSTACK;
         save_input_pos ptran(is);
         CalScale ret;
-        expect_token(is, "CALSCALE");
-        ret.params = expect_calparam(is);
-        expect_token(is, ":");
-        ret.value = expect_calvalue(is);
-        expect_newline(is);
+        expect_token("CALSCALE");
+        ret.params = expect_calparam();
+        expect_token(":");
+        ret.value = expect_calvalue();
+        expect_newline();
         ptran.commit();
         return ret;
 }
-optional<CalScale> read_calscale(istream &is) {
+optional<CalScale> IcalParser::calscale() {
         CALLSTACK;
         try {
-                return expect_calscale(is);
+                return expect_calscale();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //       calparam   = *(";" other-param)
-vector<OtherParam> expect_calparam(istream &is) {
+vector<OtherParam> IcalParser::expect_calparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         vector<OtherParam> ret;
-        while (read_token(is, ";"))
-                ret.push_back(expect_other_param(is));
+        while (token(";"))
+                ret.push_back(expect_other_param());
         ptran.commit();
         return ret;
 }
 
 //       calvalue   = "GREGORIAN"
-string expect_calvalue(istream &is) {
+string IcalParser::expect_calvalue() {
         CALLSTACK;
-        return expect_token(is, "GREGORIAN");
+        return expect_token("GREGORIAN");
 }
 
 //       method     = "METHOD" metparam ":" metvalue CRLF
-optional<Method> read_method(istream &is) {
+optional<Method> IcalParser::method() {
         CALLSTACK;
         try {
-                return expect_method(is);
+                return expect_method();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
-Method expect_method(istream &is) {
+Method IcalParser::expect_method() {
         CALLSTACK;
         save_input_pos ptran(is);
         Method ret;
-        expect_token(is, "METHOD");
-        ret.params = expect_metparam(is);
-        expect_token(is, ":");
-        ret.value = expect_metvalue(is);
-        expect_newline(is);
+        expect_token("METHOD");
+        ret.params = expect_metparam();
+        expect_token(":");
+        ret.value = expect_metvalue();
+        expect_newline();
         ptran.commit();
         return ret;
 }
 
 //       metparam   = *(";" other-param)
-std::vector<OtherParam> expect_metparam(istream &is) {
+std::vector<OtherParam> IcalParser::expect_metparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         std::vector<OtherParam> ret;
-        while (read_token(is, ";"))
-                ret.push_back(expect_other_param(is));
+        while (token(";"))
+                ret.push_back(expect_other_param());
         ptran.commit();
         return ret;
 }
 
 //       metvalue   = iana-token
-string expect_metvalue(istream &is) {
+string IcalParser::expect_metvalue() {
         CALLSTACK;
-        return expect_iana_token(is);
+        return expect_iana_token();
 }
 
 //       x-prop = x-name *(";" icalparameter) ":" value CRLF
-XProp expect_x_prop(istream &is) {
+XProp IcalParser::expect_x_prop() {
         CALLSTACK;
         save_input_pos ptran(is);
         XProp ret;
-        ret.name = expect_x_name(is);
-        while (read_token(is, ";")) {
-                ret.params.push_back(expect_icalparameter(is));
+        ret.name = expect_x_name();
+        while (token(";")) {
+                ret.params.push_back(expect_icalparameter());
         }
-        expect_token(is, ":");
-        ret.value = expect_value(is);
-        expect_newline(is);
+        expect_token(":");
+        ret.value = expect_value();
+        expect_newline();
         ptran.commit();
         return ret;
 }
-optional<XProp> read_x_prop(istream &is) {
+optional<XProp> IcalParser::x_prop() {
         CALLSTACK;
         try {
-                return expect_x_prop(is);
+                return expect_x_prop();
         } catch (syntax_error &) {
                 return nullopt;
         }
@@ -881,73 +1151,73 @@ optional<XProp> read_x_prop(istream &is) {
 
 //     x-name        = "X-" [vendorid "-"] 1*(ALPHA / DIGIT / "-")
 //     ; Reserved for experimental use.
-string expect_x_name(istream &is) {
+string IcalParser::expect_x_name() {
         CALLSTACK;
-        save_input_pos ts(is);
+        save_input_pos ptran(is);
 
         string ret;
 
         // "X-"
-        if (auto val = read_token(is, "X-")) {
+        if (auto val = token("X-")) {
                 ret += *val;
         } else {
                 throw syntax_error(is.tellg());
         }
 
         // [vendorid "-"]
-        if (auto val = read_vendorid(is)) {
+        if (auto val = vendorid()) {
                 ret += *val;
-                ret += expect_token(is, "-");
+                ret += expect_token("-");
         }
 
         // 1*(ALPHA / DIGIT / "-")
-        if (auto v = read_alnum(is)) {
+        if (auto v = alnum()) {
                 ret += *v;
-        } else if (auto v = read_token(is, "-")) {
+        } else if (auto v = token("-")) {
                 ret += *v;
         } else {
                 throw syntax_error(is.tellg());
         }
         while (true) {
-                if (auto v = read_alnum(is)) {
+                if (auto v = alnum()) {
                         ret += *v;
-                } else if (auto v = read_token(is, "-")) {
+                } else if (auto v = token("-")) {
                         ret += *v;
                 } else {
                         break;
                 }
         }
 
-        ts.commit();
+        ptran.commit();
         return ret;
 }
-optional<string> read_x_name(istream &is) {
+optional<string> IcalParser::x_name() {
         CALLSTACK;
         try {
-                return expect_x_name(is);
+                return expect_x_name();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
 //       iana-prop = iana-token *(";" icalparameter) ":" value CRLF
-void expect_iana_prop(istream &is) {
+void IcalParser::expect_iana_prop() {
         CALLSTACK;
         save_input_pos ptran(is);
-        expect_iana_token(is);
-        while (read_token(is, ";"))
-                expect_icalparameter(is);
-        expect_token(is, ":");
-        expect_value(is);
-        expect_newline(is);
+        expect_iana_token();
+        while (token(";"))
+                expect_icalparameter();
+        expect_token(":");
+        expect_value();
+        expect_newline();
         ptran.commit();
 }
-optional<IanaProp> read_iana_prop(istream &is) {
+optional<IanaProp> IcalParser::iana_prop() {
         CALLSTACK;
         return nullopt; // TODO
         NOT_IMPLEMENTED;
         try {
-                expect_iana_prop(is);
+                expect_iana_prop();
                 //return true;
         } catch (syntax_error &) {
                 //return false;
@@ -955,12 +1225,12 @@ optional<IanaProp> read_iana_prop(istream &is) {
 }
 
 //       pidparam   = *(";" other-param)
-std::vector<OtherParam> expect_pidparam(istream &is) {
+std::vector<OtherParam> IcalParser::expect_pidparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         std::vector<OtherParam> ret;
-        while (read_token(is, ";"))
-                ret.push_back(expect_other_param(is));
+        while (token(";"))
+                ret.push_back(expect_other_param());
         ptran.commit();
         return ret;
 }
@@ -970,7 +1240,7 @@ std::vector<OtherParam> expect_pidparam(istream &is) {
 //     ; Some other IANA-registered iCalendar parameter.
 //     x-param     = x-name "=" param-value *("," param-value)
 //     ; A non-standard, experimental parameter.
-OtherParam expect_other_param(istream &is) {
+OtherParam IcalParser::expect_other_param() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -978,26 +1248,26 @@ OtherParam expect_other_param(istream &is) {
 //       pidvalue   = text
 //       ;Any text that describes the product and version
 //       ;and that is generally assured of being unique.
-string expect_pidvalue(istream &is) {
+string IcalParser::expect_pidvalue() {
         CALLSTACK;
-        return expect_text(is);
+        return expect_text();
 }
 
 
 //       ESCAPED-CHAR = ("\\" / "\;" / "\," / "\N" / "\n")
 //          ; \\ encodes \, \N or \n encodes newline
 //          ; \; encodes ;, \, encodes ,
-optional<string> read_escaped_char(istream &is) {
+optional<string> IcalParser::escaped_char() {
         CALLSTACK;
-        if (auto val = read_token(is, "\\\\"))
+        if (auto val = token("\\\\"))
                 return val;
-        if (auto val = read_token(is, "\\;"))
+        if (auto val = token("\\;"))
                 return val;
-        if (auto val = read_token(is, "\\,"))
+        if (auto val = token("\\,"))
                 return val;
-        if (auto val = read_token(is, "\\N"))
+        if (auto val = token("\\N"))
                 return val;
-        if (auto val = read_token(is, "\\n"))
+        if (auto val = token("\\n"))
                 return val;
         return nullopt;
 }
@@ -1006,7 +1276,7 @@ optional<string> read_escaped_char(istream &is) {
 //                    %x5D-7E / NON-US-ASCII
 //          ; Any character except CONTROLs not needed by the current
 //          ; character set, DQUOTE, ";", ":", "\", ","
-optional<string> read_tsafe_char(istream &is) {
+optional<string> IcalParser::tsafe_char() {
         CALLSTACK;
         save_input_pos ptran(is);
         // WSP
@@ -1127,25 +1397,25 @@ optional<string> read_tsafe_char(istream &is) {
 //       text       = *(TSAFE-CHAR / ":" / DQUOTE / ESCAPED-CHAR)
 //          ; Folded according to description above
 //
-optional<string> read_text_char(istream &is) {
+optional<string> IcalParser::text_char() {
         CALLSTACK;
-        if (auto val = read_tsafe_char(is)) return val;
-        if (auto val = read_token(is, ":")) return val;
-        if (auto val = read_dquote(is)) return val;
-        if (auto val = read_escaped_char(is)) return val;
+        if (auto val = tsafe_char()) return val;
+        if (auto val = token(":")) return val;
+        if (auto val = dquote()) return val;
+        if (auto val = escaped_char()) return val;
         return nullopt;
 }
-string expect_text(istream &is) {
+string IcalParser::expect_text() {
         CALLSTACK;
         string ret;
-        while(auto c = read_text_char(is)) {
+        while(auto c = text_char()) {
                 ret += *c;
         }
         return ret;
 }
 
 // DQUOTE: ASCII 22 == '"'
-optional<string> read_dquote(istream &is) {
+optional<string> IcalParser::dquote() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto c = is.get();
@@ -1155,46 +1425,46 @@ optional<string> read_dquote(istream &is) {
         return "\"";
 }
 
-optional<string> read_text(istream &is) {
+optional<string> IcalParser::text() {
         CALLSTACK;
         try {
-                return expect_text(is);
+                return expect_text();
         } catch (syntax_error &) {
                 return nullopt;
         }
 }
 
-bool read_binary(istream &is) {
+bool IcalParser::binary() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
 //       float      = (["+"] / "-") 1*DIGIT ["." 1*DIGIT]
-optional<string> read_float(istream &is) {
+optional<string> IcalParser::float_() {
         CALLSTACK;
         save_input_pos ptran(is);
         string ret;
 
         // (["+"] / "-")
-        if (auto v = read_token(is, "+")) ret += *v;
-        else if (auto v = read_token(is, "-")) ret += *v;
+        if (auto v = token("+")) ret += *v;
+        else if (auto v = token("-")) ret += *v;
 
         // 1*DIGIT
-        if (auto v = read_digit(is)) ret += *v;
+        if (auto v = digit()) ret += *v;
         else return nullopt;
 
-        while (auto v = read_digit(is)) {
+        while (auto v = digit()) {
                 ret += *v;
         }
 
         // ["." 1*DIGIT]
-        if (auto dot = read_token(is, ".")) {
+        if (auto dot = token(".")) {
                 ret += *dot;
 
-                if (auto v = read_digit(is)) ret += *v;
+                if (auto v = digit()) ret += *v;
                 else return nullopt;
 
-                while (auto v = read_digit(is)) {
+                while (auto v = digit()) {
                         ret += *v;
                 }
         }
@@ -1204,20 +1474,20 @@ optional<string> read_float(istream &is) {
 }
 
 //       integer    = (["+"] / "-") 1*DIGIT
-optional<int> read_integer(istream &is) {
+optional<int> IcalParser::integer() {
         CALLSTACK;
         save_input_pos ptran(is);
 
         string raw;
         // (["+"] / "-")
-        if (auto v = read_token(is, "+")) raw += *v;
-        else if (auto v = read_token(is, "-")) raw += *v;
+        if (auto v = token("+")) raw += *v;
+        else if (auto v = token("-")) raw += *v;
 
         // 1*DIGIT
-        if (auto v = read_digit(is)) raw += *v;
+        if (auto v = digit()) raw += *v;
         else return nullopt;
 
-        while (auto v = read_digit(is)) {
+        while (auto v = digit()) {
                 raw += *v;
         }
         const auto ret = std::stoi(raw);
@@ -1226,50 +1496,50 @@ optional<int> read_integer(istream &is) {
 }
 
 //       actionvalue = "AUDIO" / "DISPLAY" / "EMAIL" / iana-token / x-name
-optional<string> read_actionvalue(istream &is) {
+optional<string> IcalParser::actionvalue() {
         CALLSTACK;
         save_input_pos ptran(is);
         string ret;
 
-        if (auto v = read_token(is, "AUDIO")) ret = *v;
-        else if (auto v = read_token(is, "DISPLAY")) ret = *v;
-        else if (auto v = read_token(is, "EMAIL")) ret = *v;
-        else if (auto v = read_iana_token(is)) ret = *v;
-        else if (auto v = read_x_name(is)) ret = *v;
+        if (auto v = token("AUDIO")) ret = *v;
+        else if (auto v = token("DISPLAY")) ret = *v;
+        else if (auto v = token("EMAIL")) ret = *v;
+        else if (auto v = iana_token()) ret = *v;
+        else if (auto v = x_name()) ret = *v;
         else return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       actionparam = *(";" other-param)
-optional<ActionParam> read_actionparam(istream &is) {
+optional<ActionParam> IcalParser::actionparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         ActionParam ret;
 
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
                 else return nullopt;
         }
         ptran.commit();
         return ret;
 }
 //       action      = "ACTION" actionparam ":" actionvalue CRLF
-optional<Action> read_action(istream &is) {
+optional<Action> IcalParser::action() {
         CALLSTACK;
         save_input_pos ptran(is);
         Action ret;
-        if (!read_token(is, "ACTION")) return nullopt;
+        if (!token("ACTION")) return nullopt;
 
-        if (auto v = read_actionparam(is)) ret.params = *v;
+        if (auto v = actionparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_actionvalue(is)) ret.value = *v;
+        if (auto v = actionvalue()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
@@ -1287,17 +1557,17 @@ optional<Action> read_action(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  ) ":" date-time
-optional<TrigAbs> read_trigabs(istream &is) {
+optional<TrigAbs> IcalParser::trigabs() {
         CALLSTACK;
         save_input_pos ptran(is);
         TrigAbs ret;
 
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 {
                         save_input_pos ptran(is);
-                        auto match = read_token(is, "VALUE") &&
-                                     read_token(is, "=") &&
-                                     read_token(is, "DATE-TIME");
+                        auto match = token("VALUE") &&
+                                     token("=") &&
+                                     token("DATE-TIME");
                         if (match) {
                                 ret.value = "DATE-TIME";
                                 ptran.commit();
@@ -1305,16 +1575,16 @@ optional<TrigAbs> read_trigabs(istream &is) {
                         }
                 }
 
-                if (auto v = read_other_param(is)) {
+                if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;// error
                 }
         }
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_date_time(is)) ret.dateTime = *v;
+        if (auto v = date_time()) ret.dateTime = *v;
         else return nullopt;
 
         ptran.commit();
@@ -1335,17 +1605,17 @@ optional<TrigAbs> read_trigabs(istream &is) {
 //                  ;
 //                  ) ":"  dur-value
 
-optional<TrigRel> read_trigrel(istream &is) {
+optional<TrigRel> IcalParser::trigrel() {
         CALLSTACK;
         save_input_pos ptran(is);
         TrigRel ret;
 
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 {
                         save_input_pos ptran(is);
-                        auto match = read_token(is, "VALUE") &&
-                                     read_token(is, "=") &&
-                                     read_token(is, "DURATION");
+                        auto match = token("VALUE") &&
+                                     token("=") &&
+                                     token("DURATION");
                         if (match) {
                                 ret.value = "DURATION";
                                 ptran.commit();
@@ -1353,69 +1623,69 @@ optional<TrigRel> read_trigrel(istream &is) {
                         }
                 }
 
-                if (auto v = read_trigrelparam(is)) {
+                if (auto v = trigrelparam()) {
                         ret.trigRelParam = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;// error
                 }
         }
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_dur_value(is)) ret.durValue = *v;
+        if (auto v = dur_value()) ret.durValue = *v;
         else return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       trigger    = "TRIGGER" (trigrel / trigabs) CRLF
-optional<Trigger> read_trigger(istream &is) {
+optional<Trigger> IcalParser::trigger() {
         CALLSTACK;
         save_input_pos ptran(is);
         Trigger ret;
 
-        if (!read_token(is, "TRIGGER")) return nullopt;
+        if (!token("TRIGGER")) return nullopt;
 
-        if (auto v = read_trigrel(is)) ret = *v;
-        else if (auto v = read_trigabs(is)) ret = *v;
+        if (auto v = trigrel()) ret = *v;
+        else if (auto v = trigabs()) ret = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       repparam   = *(";" other-param)
-optional<RepParam> read_repparam(istream &is) {
+optional<RepParam> IcalParser::repparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         RepParam ret;
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
                 else return nullopt; // error
         }
         ptran.commit();
         return ret;
 }
 //       repeat  = "REPEAT" repparam ":" integer CRLF  ;Default is "0", zero.
-optional<Repeat> read_repeat(istream &is) {
+optional<Repeat> IcalParser::repeat() {
         CALLSTACK;
         save_input_pos ptran(is);
         Repeat ret;
 
-        if (!read_token(is, "REPEAT")) return nullopt;
+        if (!token("REPEAT")) return nullopt;
 
-        if (auto v = read_repparam(is)) ret.params = *v;
+        if (auto v = repparam()) ret.params = *v;
         else return nullopt; // error
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_integer(is)) ret.value = *v;
+        if (auto v = integer()) ret.value = *v;
         else return nullopt; // error
 
-        if (!read_newline(is)) return nullopt; // error
+        if (!newline()) return nullopt; // error
 
         ptran.commit();
         return ret;
@@ -1445,34 +1715,34 @@ optional<Repeat> read_repeat(istream &is) {
 //                  x-prop / iana-prop
 //                  ;
 //                  )
-optional<AudioProp> read_audioprop(istream &is) {
+optional<AudioProp> IcalParser::audioprop() {
         CALLSTACK;
         save_input_pos ptran(is);
         AudioProp ret;
 
         bool req_act = false, req_trig = false;
         while(true) {
-                if (auto v = read_action(is)) {
+                if (auto v = action()) {
                         req_act = true;
                         ret.action = *v;
                 }
-                else if (auto v = read_trigger(is)) {
+                else if (auto v = trigger()) {
                         req_trig = true;
                         ret.trigger = *v;
                 }
-                else if (auto v = read_duration(is))
+                else if (auto v = duration())
                         ret.duration = *v;
-                else if (auto v = read_repeat(is))
+                else if (auto v = repeat())
                         ret.repeat = *v;
-                else if (auto v = read_attach(is))
+                else if (auto v = attach())
                         ret.attach = *v;
-                else if (auto v = read_x_prop(is))
+                else if (auto v = x_prop())
                         ret.xProps.push_back(*v);
-                else if (auto v = read_iana_prop(is))
+                else if (auto v = iana_prop())
                         ret.ianaProps.push_back(*v);
                 else break;
         }
-        // std::cerr << "read_audioprop:" << std::endl;
+        // std::cerr << "audioprop:" << std::endl;
         // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
         if (!(req_act && req_trig)) {
@@ -1500,36 +1770,36 @@ optional<AudioProp> read_audioprop(istream &is) {
 //                  x-prop / iana-prop
 //                  ;
 //                  )
-optional<DispProp> read_dispprop(istream &is) {
+optional<DispProp> IcalParser::dispprop() {
         CALLSTACK;
         save_input_pos ptran(is);
         DispProp ret;
 
         bool req_act = false, req_desc = false, req_trig = false;
         while(true) {
-                if (auto v = read_action(is)) {
+                if (auto v = action()) {
                         req_act = true;
                         ret.action = *v;
                 }
-                else if (auto v = read_description(is)) {
+                else if (auto v = description()) {
                         req_desc = true;
                         ret.description = *v;
                 }
-                else if (auto v = read_trigger(is)) {
+                else if (auto v = trigger()) {
                         req_trig = true;
                         ret.trigger = *v;
                 }
 
-                else if (auto v = read_duration(is)) ret.duration = *v;
-                else if (auto v = read_repeat(is)) ret.repeat = *v;
+                else if (auto v = duration()) ret.duration = *v;
+                else if (auto v = repeat()) ret.repeat = *v;
 
-                else if (auto v = read_x_prop(is)) ret.xProps.push_back(*v);
-                else if (auto v = read_iana_prop(is)) ret.ianaProps.push_back(*v);
+                else if (auto v = x_prop()) ret.xProps.push_back(*v);
+                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
 
                 else break;
         }
 
-        // std::cerr << "read_dispprop:" << std::endl;
+        // std::cerr << "dispprop:" << std::endl;
         // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
         // std::cerr << "  has desc   : " << (req_desc?"yes":"no") << std::endl;
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
@@ -1564,7 +1834,7 @@ optional<DispProp> read_dispprop(istream &is) {
 //                  attach / x-prop / iana-prop
 //                  ;
 //                  )
-optional<EmailProp> read_emailprop(istream &is) {
+optional<EmailProp> IcalParser::emailprop() {
         CALLSTACK;
         save_input_pos ptran(is);
         EmailProp ret;
@@ -1574,36 +1844,36 @@ optional<EmailProp> read_emailprop(istream &is) {
              req_trig = false,
              req_summ = false;
         while(true) {
-                if (auto v = read_action(is)) {
+                if (auto v = action()) {
                         req_act = true;
                         ret.action = *v;
                 }
-                else if (auto v = read_description(is)) {
+                else if (auto v = description()) {
                         req_desc = true;
                         ret.description = *v;
                 }
-                else if (auto v = read_trigger(is)) {
+                else if (auto v = trigger()) {
                         req_trig = true;
                         ret.trigger = *v;
                 }
-                else if (auto v = read_summary(is)) {
+                else if (auto v = summary()) {
                         req_summ = true;
                         ret.summary = *v;
                 }
 
-                else if (auto v = read_attendee(is)) ret.attendee = *v;
+                else if (auto v = attendee()) ret.attendee = *v;
 
-                else if (auto v = read_duration(is)) ret.duration = *v;
-                else if (auto v = read_repeat(is)) ret.repeat = *v;
+                else if (auto v = duration()) ret.duration = *v;
+                else if (auto v = repeat()) ret.repeat = *v;
 
-                else if (auto v = read_attach(is)) ret.attach.push_back(*v);
-                else if (auto v = read_x_prop(is)) ret.xProps.push_back(*v);
-                else if (auto v = read_iana_prop(is)) ret.ianaProps.push_back(*v);
+                else if (auto v = attach()) ret.attach.push_back(*v);
+                else if (auto v = x_prop()) ret.xProps.push_back(*v);
+                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
 
                 else break;
         }
 
-        // std::cerr << "read_emailprop:" << std::endl;
+        // std::cerr << "emailprop:" << std::endl;
         // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
         // std::cerr << "  has desc   : " << (req_desc?"yes":"no") << std::endl;
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
@@ -1619,23 +1889,23 @@ optional<EmailProp> read_emailprop(istream &is) {
 //       alarmc     = "BEGIN" ":" "VALARM" CRLF
 //                    (audioprop / dispprop / emailprop)
 //                    "END" ":" "VALARM" CRLF
-optional<Alarm> read_alarmc(istream &is) {
+optional<Alarm> IcalParser::alarmc() {
         CALLSTACK;
         save_input_pos ptran(is);
         Alarm ret;
 
-        if (!read_key_value(is, "BEGIN", "VALARM")) return nullopt;
+        if (!key_value("BEGIN", "VALARM")) return nullopt;
 
         // Compared to the grammar, we invert the checking-order
         // because the required fields overlap, so we check for most
         // specialized first.
 
-        if (auto v = read_emailprop(is)) ret = *v;
-        else if (auto v = read_dispprop(is)) ret = *v;
-        else if (auto v = read_audioprop(is)) ret = *v;
+        if (auto v = emailprop()) ret = *v;
+        else if (auto v = dispprop()) ret = *v;
+        else if (auto v = audioprop()) ret = *v;
         else return nullopt; // TODO: Error, not empty
 
-        if (!read_key_value(is, "END", "VALARM"))
+        if (!key_value("END", "VALARM"))
                 return nullopt; // TODO: Error, not empty
 
         ptran.commit();
@@ -1643,37 +1913,37 @@ optional<Alarm> read_alarmc(istream &is) {
 }
 
 //       date-fullyear      = 4DIGIT
-optional<string> read_date_fullyear(istream &is) {
+optional<string> IcalParser::date_fullyear() {
         CALLSTACK;
-        return read_digits(is, 4);
+        return digits(4);
 }
 
 //       date-month         = 2DIGIT        ;01-12
-optional<string> read_date_month(istream &is) {
+optional<string> IcalParser::date_month() {
         CALLSTACK;
-        return read_digits(is, 2);
+        return digits(2);
 }
 
 //       date-mday          = 2DIGIT        ;01-28, 01-29, 01-30, 01-31
 //                                          ;based on month/year
-optional<string> read_date_mday(istream &is) {
+optional<string> IcalParser::date_mday() {
         CALLSTACK;
-        return read_digits(is, 2);
+        return digits(2);
 }
 
 //       date-value         = date-fullyear date-month date-mday
-optional<Date> read_date_value(istream &is) {
+optional<Date> IcalParser::date_value() {
         CALLSTACK;
         save_input_pos ptran(is);
         Date ret;
 
-        if (auto v = read_date_fullyear(is)) ret.year = *v;
+        if (auto v = date_fullyear()) ret.year = *v;
         else return nullopt;
 
-        if (auto v = read_date_month(is)) ret.month = *v;
+        if (auto v = date_month()) ret.month = *v;
         else return nullopt;
 
-        if (auto v = read_date_mday(is)) ret.day = *v;
+        if (auto v = date_mday()) ret.day = *v;
         else return nullopt;
 
         ptran.commit();
@@ -1681,52 +1951,52 @@ optional<Date> read_date_value(istream &is) {
 }
 
 //       date               = date-value
-optional<Date> read_date(istream &is) {
+optional<Date> IcalParser::date() {
         CALLSTACK;
-        return read_date_value(is);
+        return date_value();
 }
 
 //       time-hour    = 2DIGIT        ;00-23
-optional<string> read_time_hour(istream &is) {
+optional<string> IcalParser::time_hour() {
         CALLSTACK;
-        return read_digits(is, 2);
+        return digits(2);
 }
 
 //       time-minute  = 2DIGIT        ;00-59
-optional<string> read_time_minute(istream &is) {
+optional<string> IcalParser::time_minute() {
         CALLSTACK;
-        return read_digits(is, 2);
+        return digits(2);
 }
 
 //       time-second  = 2DIGIT        ;00-60
 //       ;The "60" value is used to account for positive "leap" seconds.
-optional<string> read_time_second(istream &is) {
+optional<string> IcalParser::time_second() {
         CALLSTACK;
-        return read_digits(is, 2);
+        return digits(2);
 }
 
 //       time-utc     = "Z"
-optional<string> read_time_utc(istream &is) {
+optional<string> IcalParser::time_utc() {
         CALLSTACK;
-        return read_token(is, "Z");
+        return token("Z");
 }
 
 //       time         = time-hour time-minute time-second [time-utc]
-optional<Time> read_time(istream &is) {
+optional<Time> IcalParser::time() {
         CALLSTACK;
         save_input_pos ptran(is);
         Time ret;
 
-        if (auto v = read_time_hour(is)) ret.hour = *v;
+        if (auto v = time_hour()) ret.hour = *v;
         else return nullopt;
 
-        if (auto v = read_time_minute(is)) ret.minute = *v;
+        if (auto v = time_minute()) ret.minute = *v;
         else return nullopt;
 
-        if (auto v = read_time_second(is)) ret.second = *v;
+        if (auto v = time_second()) ret.second = *v;
         else return nullopt;
 
-        if (auto v = read_time_utc(is)) ret.utc = v;
+        if (auto v = time_utc()) ret.utc = v;
 
         ptran.commit();
         return ret;
@@ -1734,17 +2004,17 @@ optional<Time> read_time(istream &is) {
 
 //       date-time  = date "T" time ;As specified in the DATE and TIME
 //                                  ;value definitions
-optional<DateTime> read_date_time(istream &is) {
+optional<DateTime> IcalParser::date_time() {
         CALLSTACK;
         save_input_pos ptran(is);
         DateTime ret;
 
-        if (auto v = read_date(is)) ret.date = *v;
+        if (auto v = date()) ret.date = *v;
         else return nullopt;
 
-        if (!read_token(is, "T")) return nullopt;
+        if (!token("T")) return nullopt;
 
-        if (auto v = read_time(is)) ret.time = *v;
+        if (auto v = time()) ret.time = *v;
         else return nullopt;
 
         ptran.commit();
@@ -1752,99 +2022,99 @@ optional<DateTime> read_date_time(istream &is) {
 }
 
 //       dur-week   = 1*DIGIT "W"
-optional<DurWeek> read_dur_week(istream &is) {
+optional<DurWeek> IcalParser::dur_week() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurWeek ret;
 
-        if (auto v = read_digits(is, 1, -1)) ret.value = *v;
+        if (auto v = digits(1, -1)) ret.value = *v;
         else return nullopt;
 
-        if (!read_token(is, "W")) return nullopt;
+        if (!token("W")) return nullopt;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-second = 1*DIGIT "S"
-optional<DurSecond> read_dur_second(istream &is) {
+optional<DurSecond> IcalParser::dur_second() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurSecond ret;
 
-        if (auto v = read_digits(is, 1, -1)) ret.second = *v;
+        if (auto v = digits(1, -1)) ret.second = *v;
         else return nullopt;
 
-        if (!read_token(is, "S")) return nullopt;
+        if (!token("S")) return nullopt;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-minute = 1*DIGIT "M" [dur-second]
-optional<DurMinute> read_dur_minute(istream &is) {
+optional<DurMinute> IcalParser::dur_minute() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurMinute ret;
 
-        if (auto v = read_digits(is, 1, -1)) ret.minute = *v;
+        if (auto v = digits(1, -1)) ret.minute = *v;
         else return nullopt;
 
-        if (!read_token(is, "M")) return nullopt;
+        if (!token("M")) return nullopt;
 
-        if (auto v = read_dur_second(is)) ret.second = *v;
+        if (auto v = dur_second()) ret.second = *v;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-hour   = 1*DIGIT "H" [dur-minute]
-optional<DurHour> read_dur_hour(istream &is) {
+optional<DurHour> IcalParser::dur_hour() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurHour ret;
 
-        if (auto v = read_digits(is, 1, -1)) ret.hour = *v;
+        if (auto v = digits(1, -1)) ret.hour = *v;
         else return nullopt;
 
-        if (!read_token(is, "H")) return nullopt;
+        if (!token("H")) return nullopt;
 
-        if (auto v = read_dur_minute(is)) ret.minute = *v;
+        if (auto v = dur_minute()) ret.minute = *v;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-day    = 1*DIGIT "D"
-optional<DurDay> read_dur_day(istream &is) {
+optional<DurDay> IcalParser::dur_day() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurDay ret;
 
-        if (auto v = read_digits(is, 1, -1)) ret.value += *v;
+        if (auto v = digits(1, -1)) ret.value += *v;
         else return nullopt;
 
-        if (!read_token(is, "D")) return nullopt;
+        if (!token("D")) return nullopt;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-time   = "T" (dur-hour / dur-minute / dur-second)
-optional<DurTime> read_dur_time(istream &is) {
+optional<DurTime> IcalParser::dur_time() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurTime ret;
 
-        if (!read_token(is, "T")) return nullopt;
+        if (!token("T")) return nullopt;
 
-        if (auto v = read_dur_hour(is)) {
+        if (auto v = dur_hour()) {
                 ret = *v;
         }
-        else if (auto v = read_dur_minute(is)) {
+        else if (auto v = dur_minute()) {
                 ret = *v;
         }
-        else if (auto v = read_dur_second(is)) {
+        else if (auto v = dur_second()) {
                 ret = *v;
         }
         else {
@@ -1855,38 +2125,38 @@ optional<DurTime> read_dur_time(istream &is) {
 }
 
 //       dur-date   = dur-day [dur-time]
-optional<DurDate> read_dur_date(istream &is) {
+optional<DurDate> IcalParser::dur_date() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurDate ret;
 
-        if (auto v = read_dur_day(is)) ret.day = *v;
+        if (auto v = dur_day()) ret.day = *v;
         else return nullopt;
 
-        if (auto v = read_dur_time(is)) ret.time = *v;
+        if (auto v = dur_time()) ret.time = *v;
 
         ptran.commit();
         return ret;
 }
 
 //       dur-value  = (["+"] / "-") "P" (dur-date / dur-time / dur-week)
-optional<DurValue> read_dur_value(istream &is) {
+optional<DurValue> IcalParser::dur_value() {
         CALLSTACK;
         save_input_pos ptran(is);
         DurValue ret;
 
-        if(read_token(is, "+")) ret.positive = true;
-        else if (read_token(is, "-")) ret.positive = false;
+        if(token("+")) ret.positive = true;
+        else if (token("-")) ret.positive = false;
 
-        if (!read_token(is, "P")) return nullopt; // error
+        if (!token("P")) return nullopt; // error
 
-        if (auto v = read_dur_date(is)) {
+        if (auto v = dur_date()) {
                 ret.value = *v;
         }
-        else if (auto v = read_dur_time(is)) {
+        else if (auto v = dur_time()) {
                 ret.value = *v;
         }
-        else if (auto v = read_dur_week(is)) {
+        else if (auto v = dur_week()) {
                 ret.value = *v;
         }
         else return nullopt; // error
@@ -1899,13 +2169,13 @@ optional<DurValue> read_dur_value(istream &is) {
 //       ; [ISO.8601.2004] complete representation basic format for a
 //       ; period of time consisting of a start and positive duration
 //       ; of time.
-bool read_period_start(istream &is) {
+bool IcalParser::period_start() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_date_time(is) &&
-                read_token(is, "/") &&
-                read_dur_value(is) ;
+                date_time() &&
+                token("/") &&
+                dur_value() ;
         if (!match)
                 return false;
         ptran.commit();
@@ -1913,13 +2183,13 @@ bool read_period_start(istream &is) {
 }
 
 //       period-explicit = date-time "/" date-time
-bool read_period_explicit(istream &is) {
+bool IcalParser::period_explicit() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_date_time(is) &&
-                read_token(is, "/") &&
-                read_date_time(is) ;
+                date_time() &&
+                token("/") &&
+                date_time() ;
         if (!match)
                 return false;
         ptran.commit();
@@ -1930,12 +2200,12 @@ bool read_period_explicit(istream &is) {
 //       ; period of time consisting of a start and end.  The start MUST
 //       ; be before the end.
 //       period     = period-explicit / period-start
-bool read_period(istream &is) {
+bool IcalParser::period() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_period_explicit(is) ||
-                read_period_start(is) ;
+                period_explicit() ||
+                period_start() ;
         if (!match)
                 return false;
         ptran.commit();
@@ -1943,21 +2213,21 @@ bool read_period(istream &is) {
 }
 
 //     other-param   = (iana-param / x-param)
-optional<OtherParam> read_other_param(istream &is) {
+optional<OtherParam> IcalParser::other_param() {
         CALLSTACK;
-        if (auto v = read_iana_param(is)) return OtherParam{*v};
-        if (auto v = read_x_param(is)) return OtherParam{*v};
+        if (auto v = iana_param()) return OtherParam{*v};
+        if (auto v = x_param()) return OtherParam{*v};
         return optional<OtherParam>();
 }
 
 // stmparam   = *(";" other-param)
-optional<DtStampParams> read_stmparam(istream &is) {
+optional<DtStampParams> IcalParser::stmparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtStampParams ret;
 
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) {
+        while (token(";")) {
+                if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;
@@ -1968,33 +2238,33 @@ optional<DtStampParams> read_stmparam(istream &is) {
 }
 
 // dtstamp    = "DTSTAMP" stmparam ":" date-time CRLF
-optional<DtStamp> read_dtstamp(istream &is) {
+optional<DtStamp> IcalParser::dtstamp() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtStamp ret;
 
-        if (!read_token(is, "DTSTAMP")) return nullopt;
+        if (!token("DTSTAMP")) return nullopt;
 
-        if (auto v = read_stmparam(is)) ret.params = *v;
+        if (auto v = stmparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_date_time(is)) ret.date_time = *v;
+        if (auto v = date_time()) ret.date_time = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       uidparam   = *(";" other-param)
-optional<vector<OtherParam>> read_uidparam(istream &is) {
+optional<vector<OtherParam>> IcalParser::uidparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         vector<OtherParam> ret;
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) {
+        while (token(";")) {
+                if (auto v = other_param()) {
                         ret.push_back(*v);
                 } else {
                         return nullopt;
@@ -2004,31 +2274,31 @@ optional<vector<OtherParam>> read_uidparam(istream &is) {
         return ret;
 }
 //       uid        = "UID" uidparam ":" text CRLF
-optional<Uid> read_uid(istream &is) {
+optional<Uid> IcalParser::uid() {
         CALLSTACK;
         save_input_pos ptran(is);
         Uid ret;
 
-        if (!read_token(is, "UID")) return nullopt;
+        if (!token("UID")) return nullopt;
 
-        if (auto v = read_uidparam(is)) ret.params = *v;
+        if (auto v = uidparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_text(is)) ret.value = *v;
+        if (auto v = text()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is))  return nullopt;
+        if (!newline())  return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       dtstval    = date-time / date
-optional<DtStartVal> read_dtstval(istream &is) {
+optional<DtStartVal> IcalParser::dtstval() {
         CALLSTACK;
-        if (auto v = read_date_time(is)) return DtStartVal{*v};
-        if (auto v = read_date(is)) return DtStartVal{*v};
+        if (auto v = date_time()) return DtStartVal{*v};
+        if (auto v = date()) return DtStartVal{*v};
         return optional<DtStartVal>();
 }
 //       ;Value MUST match value type
@@ -2046,26 +2316,26 @@ optional<DtStartVal> read_dtstval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-optional<DtStartParams> read_dtstparam(istream &is) {
+optional<DtStartParams> IcalParser::dtstparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtStartParams ret;
 
-        while (read_token(is, ";")) {
-                if (read_token(is, "VALUE")) {
-                        if (!read_token(is, "="))
+        while (token(";")) {
+                if (token("VALUE")) {
+                        if (!token("="))
                                 return nullopt;
 
-                        if (auto v = read_token(is, "DATE-TIME")) {
+                        if (auto v = token("DATE-TIME")) {
                                 ret.value = *v;
-                        } else if (auto v = read_token(is, "DATE")) {
+                        } else if (auto v = token("DATE")) {
                                 ret.value = *v;
                         } else {
                                 return nullopt;
                         }
-                } else if (auto v = read_tzidparam(is)) {
+                } else if (auto v = tzidparam()) {
                         ret.tz_id = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;
@@ -2076,22 +2346,22 @@ optional<DtStartParams> read_dtstparam(istream &is) {
 }
 //       dtstart    = "DTSTART" dtstparam ":" dtstval CRLF
 //
-optional<DtStart> read_dtstart(istream &is) {
+optional<DtStart> IcalParser::dtstart() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtStart ret;
 
-        if (!read_token(is, "DTSTART")) return nullopt;
+        if (!token("DTSTART")) return nullopt;
 
-        if (auto v = read_dtstparam(is)) ret.params = *v;
+        if (auto v = dtstparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_dtstval(is)) ret.value = *v;
+        if (auto v = dtstval()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
@@ -2100,24 +2370,24 @@ optional<DtStart> read_dtstart(istream &is) {
 //       classvalue = "PUBLIC" / "PRIVATE" / "CONFIDENTIAL" / iana-token
 //                  / x-name
 //       ;Default is PUBLIC
-optional<string> read_classvalue(istream &is) {
+optional<string> IcalParser::classvalue() {
         CALLSTACK;
-        if (auto v = read_token(is, "PUBLIC")) return v;
-        if (auto v = read_token(is, "PRIVATE")) return v;
-        if (auto v = read_token(is, "CONFIDENTIAL")) return v;
-        if (auto v = read_iana_token(is)) return v;
-        if (auto v = read_x_name(is)) return v;
+        if (auto v = token("PUBLIC")) return v;
+        if (auto v = token("PRIVATE")) return v;
+        if (auto v = token("CONFIDENTIAL")) return v;
+        if (auto v = iana_token()) return v;
+        if (auto v = x_name()) return v;
         else return nullopt;
 }
 
 //       classparam = *(";" other-param)
-optional<ClassParams> read_classparam(istream &is) {
+optional<ClassParams> IcalParser::classparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         ClassParams ret;
 
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
                 else return nullopt;
         }
         ptran.commit();
@@ -2125,28 +2395,28 @@ optional<ClassParams> read_classparam(istream &is) {
 }
 
 //       class      = "CLASS" classparam ":" classvalue CRLF
-optional<Class> read_class(istream &is) {
+optional<Class> IcalParser::class_() {
         CALLSTACK;
         save_input_pos ptran(is);
         Class ret;
 
-        if (!read_token(is, "CLASS")) return nullopt;
+        if (!token("CLASS")) return nullopt;
 
-        if (auto v = read_classparam(is)) ret.params = *v;
+        if (auto v = classparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_classvalue(is)) ret.value = *v;
+        if (auto v = classvalue()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       creaparam  = *(";" other-param)
-bool read_creaparam(istream &is) {
+bool IcalParser::creaparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2154,15 +2424,15 @@ bool read_creaparam(istream &is) {
         return true;
 }
 //       created    = "CREATED" creaparam ":" date-time CRLF
-optional<Created> read_created(istream &is) {
+optional<Created> IcalParser::created() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "CREATED") &&
-                read_creaparam(is) &&
-                read_token(is, ":") &&
-                read_date_time(is) &&
-                read_newline(is);
+                token("CREATED") &&
+                creaparam() &&
+                token(":") &&
+                date_time() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -2182,16 +2452,16 @@ optional<Created> read_created(istream &is) {
 //                   (";" other-param)
 //                   ;
 //                   )
-optional<DescParams> read_descparam(istream &is) {
+optional<DescParams> IcalParser::descparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DescParams ret;
-        while(read_token(is, ";")) {
-                if (auto v = read_altrepparam(is)) {
+        while(token(";")) {
+                if (auto v = altrepparam()) {
                         ret.alt_rep = *v;
-                } else if (auto v = read_languageparam(is)) {
+                } else if (auto v = languageparam()) {
                         ret.language = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         std::cerr << " unknown" << std::endl;
@@ -2202,22 +2472,22 @@ optional<DescParams> read_descparam(istream &is) {
         return ret;
 }
 //       description = "DESCRIPTION" descparam ":" text CRLF
-optional<Description> read_description(istream &is) {
+optional<Description> IcalParser::description() {
         CALLSTACK;
         save_input_pos ptran(is);
         Description ret;
 
-        if (!read_token(is, "DESCRIPTION")) return nullopt;
+        if (!token("DESCRIPTION")) return nullopt;
 
-        if (auto v = read_descparam(is)) ret.params = *v;
+        if (auto v = descparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_text(is)) ret.value = *v;
+        if (auto v = text()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
@@ -2225,56 +2495,56 @@ optional<Description> read_description(istream &is) {
 
 //       geovalue   = float ";" float
 //       ;Latitude and Longitude components
-optional<GeoValue> read_geovalue(istream &is) {
+optional<GeoValue> IcalParser::geovalue() {
         CALLSTACK;
         save_input_pos ptran(is);
         GeoValue ret;
-        if (auto v = read_float(is)) ret.latitude = *v;
+        if (auto v = float_()) ret.latitude = *v;
         else return nullopt;
 
-        if (!read_token(is, ";")) return nullopt;
+        if (!token(";")) return nullopt;
 
-        if (auto v = read_float(is)) ret.longitude = *v;
+        if (auto v = float_()) ret.longitude = *v;
         else return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       geoparam   = *(";" other-param)
-optional<GeoParams> read_geoparam(istream &is) {
+optional<GeoParams> IcalParser::geoparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         GeoParams ret;
-        while (read_token(is, ";")) {
-                if (auto v = read_other_param(is)) ret.params.push_back(*v);
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
                 else return nullopt;
         }
         ptran.commit();
         return ret;
 }
 //       geo        = "GEO" geoparam ":" geovalue CRLF
-optional<Geo> read_geo(istream &is) {
+optional<Geo> IcalParser::geo() {
         CALLSTACK;
         save_input_pos ptran(is);
         Geo ret;
 
-        if (!read_token(is, "GEO")) return nullopt;
+        if (!token("GEO")) return nullopt;
 
-        if (auto v = read_geoparam(is)) ret.params = *v;
+        if (auto v = geoparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_geovalue(is)) ret.value = *v;
+        if (auto v = geovalue()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 //       lstparam   = *(";" other-param)
-bool read_lstparam(istream &is) {
+bool IcalParser::lstparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2282,15 +2552,15 @@ bool read_lstparam(istream &is) {
         return true;
 }
 //       last-mod   = "LAST-MODIFIED" lstparam ":" date-time CRLF
-optional<LastMod> read_last_mod(istream &is) {
+optional<LastMod> IcalParser::last_mod() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "LAST-MODIFIED") &&
-                read_lstparam(is) &&
-                read_token(is, ":") &&
-                read_date_time(is) &&
-                read_newline(is);
+                token("LAST-MODIFIED") &&
+                lstparam() &&
+                token(":") &&
+                date_time() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -2311,16 +2581,16 @@ optional<LastMod> read_last_mod(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-optional<LocParams> read_locparam(istream &is) {
+optional<LocParams> IcalParser::locparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         LocParams ret;
-        while(read_token(is, ";")) {
-                if (auto v = read_altrepparam(is)) {
+        while(token(";")) {
+                if (auto v = altrepparam()) {
                         ret.alt_rep = *v;
-                } else if (auto v = read_languageparam(is)) {
+                } else if (auto v = languageparam()) {
                         ret.language = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         std::cerr << " unknown" << std::endl;
@@ -2331,24 +2601,25 @@ optional<LocParams> read_locparam(istream &is) {
         return ret;
 }
 //       location   = "LOCATION"  locparam ":" text CRLF
-optional<Location> read_location(istream &is) {
+optional<Location> IcalParser::location() {
         CALLSTACK;
         save_input_pos ptran(is);
         Location ret;
-        if (!read_token(is, "LOCATION"))
+        if (!token("LOCATION"))
                 return nullopt;
 
-        if (auto v = read_locparam(is)) ret.params = *v;
+        if (auto v = locparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_text(is)) ret.value = *v;
+        if (auto v = text()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
+
         return ret;
 }
 //       orgparam   = *(
@@ -2367,20 +2638,20 @@ optional<Location> read_location(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-optional<OrgParams> read_orgparam(istream &is) {
+optional<OrgParams> IcalParser::orgparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         OrgParams ret;
-        while(read_token(is, ";")) {
-                if (auto v = read_cnparam(is)) {
+        while(token(";")) {
+                if (auto v = cnparam()) {
                         ret.cn = *v;
-                } else if (auto v = read_dirparam(is)) {
+                } else if (auto v = dirparam()) {
                         ret.dir = *v;
-                } else if (auto v = read_sentbyparam(is)) {
+                } else if (auto v = sentbyparam()) {
                         ret.sentBy = *v;
-                } else if (auto v = read_languageparam(is)) {
+                } else if (auto v = languageparam()) {
                         ret.language = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         std::cerr << " unknown" << std::endl;
@@ -2391,35 +2662,35 @@ optional<OrgParams> read_orgparam(istream &is) {
         return ret;
 }
 //       cal-address        = uri
-optional<Uri> read_cal_address(istream &is) {
+optional<Uri> IcalParser::cal_address() {
         CALLSTACK;
-        return read_uri(is);
+        return uri();
 }
 //       organizer  = "ORGANIZER" orgparam ":" cal-address CRLF
-optional<Organizer> read_organizer(istream &is) {
+optional<Organizer> IcalParser::organizer() {
         CALLSTACK;
         save_input_pos ptran(is);
         Organizer ret;
 
-        if (!read_token(is, "ORGANIZER"))
+        if (!token("ORGANIZER"))
                 return nullopt;
 
-        if (auto v = read_orgparam(is)) {
+        if (auto v = orgparam()) {
                 ret.params = *v;
         } else {
                 return nullopt;
         }
 
-        if (!read_token(is, ":"))
+        if (!token(":"))
                 return nullopt;
 
-        if (auto v = read_cal_address(is)) {
+        if (auto v = cal_address()) {
                 ret.address = *v;
         } else {
                 return nullopt;
         }
 
-        if (!read_newline(is))
+        if (!newline())
                 return nullopt;
 
         ptran.commit();
@@ -2428,7 +2699,7 @@ optional<Organizer> read_organizer(istream &is) {
 
 //       priovalue   = integer       ;Must be in the range [0..9]
 //          ; All other values are reserved for future use.
-bool read_priovalue(istream &is) {
+bool IcalParser::priovalue() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2436,7 +2707,7 @@ bool read_priovalue(istream &is) {
         return true;
 }
 //       prioparam  = *(";" other-param)
-bool read_prioparam(istream &is) {
+bool IcalParser::prioparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2445,47 +2716,47 @@ bool read_prioparam(istream &is) {
 }
 //       priority   = "PRIORITY" prioparam ":" priovalue CRLF
 //       ;Default is zero (i.e., undefined).
-optional<Priority> read_priority(istream &is) {
+optional<Priority> IcalParser::priority() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "PRIORITY") &&
-                read_prioparam(is) &&
-                read_token(is, ":") &&
-                read_priovalue(is) &&
-                read_newline(is);
+                token("PRIORITY") &&
+                prioparam() &&
+                token(":") &&
+                priovalue() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
 }
 //       seqparam   = *(";" other-param)
-optional<SeqParams> read_seqparam(istream &is) {
+optional<SeqParams> IcalParser::seqparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         SeqParams ret;
-        while (auto v = read_other_param(is))
+        while (auto v = other_param())
                 ret.params.push_back(*v);
         ptran.commit();
         return ret;
 }
 //       seq = "SEQUENCE" seqparam ":" integer CRLF     ; Default is "0"
-optional<Seq> read_seq(istream &is) {
+optional<Seq> IcalParser::seq() {
         CALLSTACK;
         save_input_pos ptran(is);
         Seq ret;
 
-        if (!read_token(is, "SEQUENCE")) return nullopt;
+        if (!token("SEQUENCE")) return nullopt;
 
-        if (auto v = read_seqparam(is)) ret.params = *v;
+        if (auto v = seqparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_integer(is)) ret.value = *v;
+        if (auto v = integer()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
@@ -2494,7 +2765,7 @@ optional<Seq> read_seq(istream &is) {
 //                       / "FINAL"        ;Indicates journal is final.
 //                       / "CANCELLED"    ;Indicates journal is removed.
 //      ;Status values for "VJOURNAL".
-bool read_statvalue_jour(istream &is) {
+bool IcalParser::statvalue_jour() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2507,7 +2778,7 @@ bool read_statvalue_jour(istream &is) {
 //                       / "IN-PROCESS"   ;Indicates to-do in process of.
 //                       / "CANCELLED"    ;Indicates to-do was cancelled.
 //       ;Status values for "VTODO".
-bool read_statvalue_todo(istream &is) {
+bool IcalParser::statvalue_todo() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2519,7 +2790,7 @@ bool read_statvalue_todo(istream &is) {
 //       statvalue       = (statvalue-event
 //                       /  statvalue-todo
 //                       /  statvalue-jour)
-bool read_statvalue(istream &is) {
+bool IcalParser::statvalue() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2531,7 +2802,7 @@ bool read_statvalue(istream &is) {
 //                       / "CONFIRMED"    ;Indicates event is definite.
 //                       / "CANCELLED"    ;Indicates event was cancelled.
 //       ;Status values for a "VEVENT"
-bool read_statvalue_event(istream &is) {
+bool IcalParser::statvalue_event() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2540,7 +2811,7 @@ bool read_statvalue_event(istream &is) {
 }
 
 //       statparam       = *(";" other-param)
-bool read_statparam(istream &is) {
+bool IcalParser::statparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2549,15 +2820,15 @@ bool read_statparam(istream &is) {
 }
 
 //       status          = "STATUS" statparam ":" statvalue CRLF
-optional<Status> read_status(istream &is) {
+optional<Status> IcalParser::status() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "STATUS") &&
-                read_statparam(is) &&
-                read_token(is, ":") &&
-                read_statvalue(is) &&
-                read_newline(is);
+                token("STATUS") &&
+                statparam() &&
+                token(":") &&
+                statvalue() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -2577,16 +2848,16 @@ optional<Status> read_status(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-optional<SummParams> read_summparam(istream &is) {
+optional<SummParams> IcalParser::summparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         SummParams ret;
-        while(read_token(is, ";")) {
-                if (auto v = read_altrepparam(is)) {
+        while(token(";")) {
+                if (auto v = altrepparam()) {
                         ret.alt_rep = *v;
-                } else if (auto v = read_languageparam(is)) {
+                } else if (auto v = languageparam()) {
                         ret.language = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         std::cerr << " unknown" << std::endl;
@@ -2598,33 +2869,33 @@ optional<SummParams> read_summparam(istream &is) {
 }
 
 //       summary    = "SUMMARY" summparam ":" text CRLF
-optional<Summary> read_summary(istream &is) {
+optional<Summary> IcalParser::summary() {
         CALLSTACK;
         save_input_pos ptran(is);
         Summary ret;
-        if (!read_token(is, "SUMMARY"))
+        if (!token("SUMMARY"))
                 return nullopt;
 
-        if (auto v = read_summparam(is)) ret.params = *v;
+        if (auto v = summparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_text(is)) ret.value = *v;
+        if (auto v = text()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 
 //       transparam = *(";" other-param)
-bool read_transparam(istream &is) {
+bool IcalParser::transparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
-                if (!read_other_param(is))
+        while (token(";")) {
+                if (!other_param())
                         return false;
         }
         ptran.commit();
@@ -2636,12 +2907,12 @@ bool read_transparam(istream &is) {
 //                   / "TRANSPARENT"
 //                   ;Transparent on busy time searches.
 //       ;Default value is OPAQUE
-bool read_transvalue(istream &is) {
+bool IcalParser::transvalue() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "OPAQUE") ||
-                read_token(is, "TRANSPARENT");
+                token("OPAQUE") ||
+                token("TRANSPARENT");
         if (!success)
                 return false;
         ptran.commit();
@@ -2649,22 +2920,22 @@ bool read_transvalue(istream &is) {
 }
 
 //       transp     = "TRANSP" transparam ":" transvalue CRLF
-optional<Transp> read_transp(istream &is) {
+optional<Transp> IcalParser::transp() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "TRANSP") &&
-                read_transparam(is) &&
-                read_token(is, ":") &&
-                read_transvalue(is) &&
-                read_newline(is);
+                token("TRANSP") &&
+                transparam() &&
+                token(":") &&
+                transvalue() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
 }
 //      uri = <As defined in Section 3 of [RFC3986]>
-optional<Uri> read_uri(istream &is) {
+optional<Uri> IcalParser::uri() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto uri = rfc3986::read_URI(is);
@@ -2674,7 +2945,7 @@ optional<Uri> read_uri(istream &is) {
         return uri;
 }
 //       urlparam   = *(";" other-param)
-bool read_urlparam(istream &is) {
+bool IcalParser::urlparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2682,15 +2953,15 @@ bool read_urlparam(istream &is) {
         return true;
 }
 //       url        = "URL" urlparam ":" uri CRLF
-optional<Url> read_url(istream &is) {
+optional<Url> IcalParser::url() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "URL") &&
-                read_urlparam(is) &&
-                read_token(is, ":") &&
-                read_uri(is) &&
-                read_newline(is);
+                token("URL") &&
+                urlparam() &&
+                token(":") &&
+                uri() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -2698,10 +2969,10 @@ optional<Url> read_url(istream &is) {
 }
 //       ridval     = date-time / date
 //       ;Value MUST match value type
-bool read_ridval(istream &is) {
+bool IcalParser::ridval() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success = read_date_time(is) || read_date(is);
+        const auto success = date_time() || date();
         if (!success)
                 return false;
         ptran.commit();
@@ -2723,16 +2994,16 @@ bool read_ridval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_ridparam_single(istream &is) {
+bool IcalParser::ridparam_single() {
         CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
         {
                 save_input_pos ptran(is);
                 const auto success =
-                        read_token(is, ";") &&
-                        read_token(is, "VALUE") &&
-                        read_token(is, "=") &&
-                        (read_token(is, "DATE-TIME") || read_token(is, "DATE"));
+                        token(";") &&
+                        token("VALUE") &&
+                        token("=") &&
+                        (token("DATE-TIME") || token("DATE"));
                 if (success) {
                         ptran.commit();
                         return true;
@@ -2742,8 +3013,8 @@ bool read_ridparam_single(istream &is) {
         {
                 save_input_pos ptran(is);
                 const auto success =
-                        read_token(is, ";") &&
-                        (read_tzidparam(is) || read_rangeparam(is));
+                        token(";") &&
+                        (tzidparam() || rangeparam());
                 if (success) {
                         ptran.commit();
                         return true;
@@ -2753,8 +3024,8 @@ bool read_ridparam_single(istream &is) {
         {
                 save_input_pos ptran(is);
                 const auto success =
-                        read_token(is, ";") &&
-                        read_other_param(is);
+                        token(";") &&
+                        other_param();
                 if (success) {
                         ptran.commit();
                         return true;
@@ -2762,17 +3033,17 @@ bool read_ridparam_single(istream &is) {
         }
         return false;
 }
-bool read_ridparam(istream &is) {
+bool IcalParser::ridparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_ridparam_single(is)) {
+        while (ridparam_single()) {
         }
         ptran.commit();
         return true;
 }
 
 //       setposday   = yeardaynum
-bool read_setposday(istream &is) {
+bool IcalParser::setposday() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2785,7 +3056,7 @@ bool read_setposday(istream &is) {
 }
 
 //       bysplist    = ( setposday *("," setposday) )
-bool read_bysplist(istream &is) {
+bool IcalParser::bysplist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2798,7 +3069,7 @@ bool read_bysplist(istream &is) {
 }
 
 //       monthnum    = 1*2DIGIT       ;1 to 12
-bool read_monthnum(istream &is) {
+bool IcalParser::monthnum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2811,7 +3082,7 @@ bool read_monthnum(istream &is) {
 }
 
 //       bymolist    = ( monthnum *("," monthnum) )
-bool read_bymolist(istream &is) {
+bool IcalParser::bymolist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2824,7 +3095,7 @@ bool read_bymolist(istream &is) {
 }
 
 //       weeknum     = [plus / minus] ordwk
-bool read_weeknum(istream &is) {
+bool IcalParser::weeknum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2837,7 +3108,7 @@ bool read_weeknum(istream &is) {
 }
 
 //       bywknolist  = ( weeknum *("," weeknum) )
-bool read_bywknolist(istream &is) {
+bool IcalParser::bywknolist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2850,7 +3121,7 @@ bool read_bywknolist(istream &is) {
 }
 
 //       ordyrday    = 1*3DIGIT      ;1 to 366
-bool read_ordyrday(istream &is) {
+bool IcalParser::ordyrday() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2863,7 +3134,7 @@ bool read_ordyrday(istream &is) {
 }
 
 //       yeardaynum  = [plus / minus] ordyrday
-bool read_yeardaynum(istream &is) {
+bool IcalParser::yeardaynum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2876,7 +3147,7 @@ bool read_yeardaynum(istream &is) {
 }
 
 //       byyrdaylist = ( yeardaynum *("," yeardaynum) )
-bool read_byyrdaylist(istream &is) {
+bool IcalParser::byyrdaylist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2889,7 +3160,7 @@ bool read_byyrdaylist(istream &is) {
 }
 
 //       ordmoday    = 1*2DIGIT       ;1 to 31
-bool read_ordmoday(istream &is) {
+bool IcalParser::ordmoday() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2902,7 +3173,7 @@ bool read_ordmoday(istream &is) {
 }
 
 //       monthdaynum = [plus / minus] ordmoday
-bool read_monthdaynum(istream &is) {
+bool IcalParser::monthdaynum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2915,7 +3186,7 @@ bool read_monthdaynum(istream &is) {
 }
 
 //       bymodaylist = ( monthdaynum *("," monthdaynum) )
-bool read_bymodaylist(istream &is) {
+bool IcalParser::bymodaylist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2930,7 +3201,7 @@ bool read_bymodaylist(istream &is) {
 //       weekday     = "SU" / "MO" / "TU" / "WE" / "TH" / "FR" / "SA"
 //       ;Corresponding to SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY,
 //       ;FRIDAY, and SATURDAY days of the week.
-bool read_weekday(istream &is) {
+bool IcalParser::weekday() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2943,7 +3214,7 @@ bool read_weekday(istream &is) {
 }
 
 //       ordwk       = 1*2DIGIT       ;1 to 53
-bool read_ordwk(istream &is) {
+bool IcalParser::ordwk() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2956,7 +3227,7 @@ bool read_ordwk(istream &is) {
 }
 
 //       minus       = "-"
-bool readminus(istream &is) {
+bool IcalParser::minus() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2969,7 +3240,7 @@ bool readminus(istream &is) {
 }
 
 //       plus        = "+"
-bool read_plus(istream &is) {
+bool IcalParser::plus() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2982,7 +3253,7 @@ bool read_plus(istream &is) {
 }
 
 //       weekdaynum  = [[plus / minus] ordwk] weekday
-bool read_weekdaynum(istream &is) {
+bool IcalParser::weekdaynum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -2995,7 +3266,7 @@ bool read_weekdaynum(istream &is) {
 }
 
 //       bywdaylist  = ( weekdaynum *("," weekdaynum) )
-bool read_bywdaylist(istream &is) {
+bool IcalParser::bywdaylist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3008,7 +3279,7 @@ bool read_bywdaylist(istream &is) {
 }
 
 //       hour        = 1*2DIGIT       ;0 to 23
-bool read_hour(istream &is) {
+bool IcalParser::hour() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3021,7 +3292,7 @@ bool read_hour(istream &is) {
 }
 
 //       byhrlist    = ( hour *("," hour) )
-bool read_byhrlist(istream &is) {
+bool IcalParser::byhrlist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3034,7 +3305,7 @@ bool read_byhrlist(istream &is) {
 }
 
 //       minutes     = 1*2DIGIT       ;0 to 59
-bool read_minutes(istream &is) {
+bool IcalParser::minutes() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3047,7 +3318,7 @@ bool read_minutes(istream &is) {
 }
 
 //       byminlist   = ( minutes *("," minutes) )
-bool read_byminlist(istream &is) {
+bool IcalParser::byminlist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3060,7 +3331,7 @@ bool read_byminlist(istream &is) {
 }
 
 //       seconds     = 1*2DIGIT       ;0 to 60
-bool read_seconds(istream &is) {
+bool IcalParser::seconds() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3073,7 +3344,7 @@ bool read_seconds(istream &is) {
 }
 
 //       byseclist   = ( seconds *("," seconds) )
-bool read_byseclist(istream &is) {
+bool IcalParser::byseclist() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3086,7 +3357,7 @@ bool read_byseclist(istream &is) {
 }
 
 //       enddate     = date / date-time
-bool read_enddate(istream &is) {
+bool IcalParser::enddate() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3100,7 +3371,7 @@ bool read_enddate(istream &is) {
 
 //       freq        = "SECONDLY" / "MINUTELY" / "HOURLY" / "DAILY"
 //                   / "WEEKLY" / "MONTHLY" / "YEARLY"
-bool read_freq(istream &is) {
+bool IcalParser::freq() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3126,7 +3397,7 @@ bool read_freq(istream &is) {
 //                       / ( "BYMONTH" "=" bymolist )
 //                       / ( "BYSETPOS" "=" bysplist )
 //                       / ( "WKST" "=" weekday )
-bool read_recur_rule_part(istream &is) {
+bool IcalParser::recur_rule_part() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3151,7 +3422,7 @@ bool read_recur_rule_part(istream &is) {
 //                       ;
 //                       ; The other rule parts are OPTIONAL,
 //                       ; but MUST NOT occur more than once.
-bool read_recur(istream &is) {
+bool IcalParser::recur() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3164,22 +3435,22 @@ bool read_recur(istream &is) {
 }
 
 //       recurid    = "RECURRENCE-ID" ridparam ":" ridval CRLF
-optional<RecurId> read_recurid(istream &is) {
+optional<RecurId> IcalParser::recurid() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "RECURRENCE-ID") &&
-                read_ridparam(is) &&
-                read_token(is, ":") &&
-                read_ridval(is) &&
-                read_newline(is);
+                token("RECURRENCE-ID") &&
+                ridparam() &&
+                token(":") &&
+                ridval() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
 }
 //       rrulparam  = *(";" other-param)
-bool read_rrulparam(istream &is) {
+bool IcalParser::rrulparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3188,15 +3459,15 @@ bool read_rrulparam(istream &is) {
 }
 
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
-optional<RRule> read_rrule(istream &is) {
+optional<RRule> IcalParser::rrule() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "RRULE") &&
-                read_rrulparam(is) &&
-                read_token(is, ":") &&
-                read_recur(is) &&
-                read_newline(is);
+                token("RRULE") &&
+                rrulparam() &&
+                token(":") &&
+                recur() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -3205,10 +3476,10 @@ optional<RRule> read_rrule(istream &is) {
 
 //       dtendval   = date-time / date
 //       ;Value MUST match value type
-optional<DtEndVal> read_dtendval(istream &is) {
+optional<DtEndVal> IcalParser::dtendval() {
         CALLSTACK;
-        if (auto v = read_date_time(is)) return DtEndVal{*v};
-        if (auto v = read_date(is)) return DtEndVal{*v};
+        if (auto v = date_time()) return DtEndVal{*v};
+        if (auto v = date()) return DtEndVal{*v};
         return optional<DtStartVal>();
 }
 
@@ -3226,26 +3497,26 @@ optional<DtEndVal> read_dtendval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //           )
-optional<DtEndParams> read_dtendparam(istream &is) {
+optional<DtEndParams> IcalParser::dtendparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtEndParams ret;
 
-        while (read_token(is, ";")) {
-                if (read_token(is, "VALUE")) {
-                        if (!read_token(is, "="))
+        while (token(";")) {
+                if (token("VALUE")) {
+                        if (!token("="))
                                 return nullopt;
 
-                        if (auto v = read_token(is, "DATE-TIME")) {
+                        if (auto v = token("DATE-TIME")) {
                                 ret.value = *v;
-                        } else if (auto v = read_token(is, "DATE")) {
+                        } else if (auto v = token("DATE")) {
                                 ret.value = *v;
                         } else {
                                 return nullopt;
                         }
-                } else if (auto v = read_tzidparam(is)) {
+                } else if (auto v = tzidparam()) {
                         ret.tz_id = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;
@@ -3256,29 +3527,29 @@ optional<DtEndParams> read_dtendparam(istream &is) {
 }
 
 //       dtend      = "DTEND" dtendparam ":" dtendval CRLF
-optional<DtEnd> read_dtend(istream &is) {
+optional<DtEnd> IcalParser::dtend() {
         CALLSTACK;
         save_input_pos ptran(is);
         DtEnd ret;
 
-        if (!read_token(is, "DTEND")) return nullopt;
+        if (!token("DTEND")) return nullopt;
 
-        if (auto v = read_dtendparam(is)) ret.params = *v;
+        if (auto v = dtendparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_dtendval(is)) ret.value = *v;
+        if (auto v = dtendval()) ret.value = *v;
         else return nullopt;
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
 }
 
 //       durparam   = *(";" other-param)
-bool read_durparam(istream &is) {
+bool IcalParser::durparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3292,15 +3563,15 @@ bool read_durparam(istream &is) {
 
 //       duration   = "DURATION" durparam ":" dur-value CRLF
 //                    ;consisting of a positive duration of time.
-optional<Duration> read_duration(istream &is) {
+optional<Duration> IcalParser::duration() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "DURATION") &&
-                read_durparam(is) &&
-                read_token(is, ":") &&
-                read_dur_value(is) &&
-                read_newline(is);
+                token("DURATION") &&
+                durparam() &&
+                token(":") &&
+                dur_value() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -3321,12 +3592,12 @@ optional<Duration> read_duration(istream &is) {
 //                   (";" other-param)
 //                   ;
 //                   )
-bool read_attachparam(istream &is) {
+bool IcalParser::attachparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, ";") &&
-                (read_fmttypeparam(is) || read_other_param(is));
+                token(";") &&
+                (fmttypeparam() || other_param());
         if (!success)
                 return false;
         ptran.commit();
@@ -3343,12 +3614,12 @@ bool read_attachparam(istream &is) {
 //                        ":" binary
 //                    )
 //                    CRLF
-optional<Attach> read_attach(istream &is) {
+optional<Attach> IcalParser::attach() {
         CALLSTACK;
         save_input_pos ptran(is);
 
         const auto match_head =
-                read_token(is, "ATTACH") && read_attachparam(is);
+                token("ATTACH") && attachparam();
         if (!match_head)
                 return nullopt;
 
@@ -3356,9 +3627,9 @@ optional<Attach> read_attach(istream &is) {
         {
                 save_input_pos ptran_uri(is);
                 const auto match_uri =
-                        read_token(is, ":") &&
-                        read_uri(is) &&
-                        read_newline(is) ;
+                        token(":") &&
+                        uri() &&
+                        newline() ;
                 if (match_uri) {
                         ptran_uri.commit();
                         ptran.commit();
@@ -3370,17 +3641,17 @@ optional<Attach> read_attach(istream &is) {
         {
                 save_input_pos ptran_enc(is);
                 const auto match_enc =
-                        read_token(is, ";") &&
-                        read_token(is, "ENCODING") &&
-                        read_token(is, "=") &&
-                        read_token(is, "BASE64") &&
-                        read_token(is, ";") &&
-                        read_token(is, "VALUE") &&
-                        read_token(is, "=") &&
-                        read_token(is, "BINARY") &&
-                        read_token(is, ":") &&
-                        read_binary(is) &&
-                        read_newline(is) ;
+                        token(";") &&
+                        token("ENCODING") &&
+                        token("=") &&
+                        token("BASE64") &&
+                        token(";") &&
+                        token("VALUE") &&
+                        token("=") &&
+                        token("BINARY") &&
+                        token(":") &&
+                        binary() &&
+                        newline() ;
                 if (match_enc) {
                         ptran_enc.commit();
                         ptran.commit();
@@ -3408,7 +3679,7 @@ optional<Attach> read_attach(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_attparam(istream &is) {
+bool IcalParser::attparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3416,15 +3687,15 @@ bool read_attparam(istream &is) {
         return true;
 }
 //       attendee   = "ATTENDEE" attparam ":" cal-address CRLF
-optional<Attendee> read_attendee(istream &is) {
+optional<Attendee> IcalParser::attendee() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_token(is, "ATTENDEE") &&
-                read_attparam(is) &&
-                read_token(is, ":") &&
-                read_cal_address(is) &&
-                read_newline(is);
+                token("ATTENDEE") &&
+                attparam() &&
+                token(":") &&
+                cal_address() &&
+                newline();
         if (!match)
                 return nullopt;
         ptran.commit();
@@ -3443,14 +3714,14 @@ optional<Attendee> read_attendee(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-optional<CatParams> read_catparam(istream &is) {
+optional<CatParams> IcalParser::catparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         CatParams ret;
-        while (read_token(is, ";")) {
-                if (auto v = read_languageparam(is)) {
+        while (token(";")) {
+                if (auto v = languageparam()) {
                         ret.language = *v;
-                } else if (auto v = read_other_param(is)) {
+                } else if (auto v = other_param()) {
                         ret.params.push_back(*v);
                 } else {
                         return nullopt;
@@ -3461,27 +3732,27 @@ optional<CatParams> read_catparam(istream &is) {
 }
 //       categories = "CATEGORIES" catparam ":" text *("," text)
 //                    CRLF
-optional<Categories> read_categories (istream &is) {
+optional<Categories> IcalParser::categories () {
         CALLSTACK;
         save_input_pos ptran(is);
         Categories ret;
 
-        if (!read_token(is, "CATEGORIES")) return nullopt;
+        if (!token("CATEGORIES")) return nullopt;
 
-        if (auto v = read_catparam(is)) ret.params = *v;
+        if (auto v = catparam()) ret.params = *v;
         else return nullopt;
 
-        if (!read_token(is, ":")) return nullopt;
+        if (!token(":")) return nullopt;
 
-        if (auto v = read_text(is)) ret.values.push_back(*v);
+        if (auto v = text()) ret.values.push_back(*v);
         else return nullopt;
 
-        while (read_token(is, ",")) {
-                if (auto v = read_text(is)) ret.values.push_back(*v);
+        while (token(",")) {
+                if (auto v = text()) ret.values.push_back(*v);
                 else return nullopt;
         }
 
-        if (!read_newline(is)) return nullopt;
+        if (!newline()) return nullopt;
 
         ptran.commit();
         return ret;
@@ -3500,14 +3771,14 @@ optional<Categories> read_categories (istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_commparam(istream &is) {
+bool IcalParser::commparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 const auto match =
-                        read_altrepparam(is) ||
-                        read_languageparam(is) ||
-                        read_other_param(is);
+                        altrepparam() ||
+                        languageparam() ||
+                        other_param();
                 if (!match)
                         return false;
         }
@@ -3515,15 +3786,15 @@ bool read_commparam(istream &is) {
         return true;
 }
 //       comment    = "COMMENT" commparam ":" text CRLF
-optional<Comment> read_comment(istream &is) {
+optional<Comment> IcalParser::comment() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_token(is, "COMMENT") &&
-                read_commparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
+                token("COMMENT") &&
+                commparam() &&
+                token(":") &&
+                text() &&
+                newline();
         if (!match)
                 return nullopt;
         ptran.commit();
@@ -3543,14 +3814,14 @@ optional<Comment> read_comment(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_contparam(istream &is) {
+bool IcalParser::contparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 const auto match =
-                        read_altrepparam(is) ||
-                        read_languageparam(is) ||
-                        read_other_param(is);
+                        altrepparam() ||
+                        languageparam() ||
+                        other_param();
                 if (!match)
                         return false;
         }
@@ -3558,15 +3829,15 @@ bool read_contparam(istream &is) {
         return true;
 }
 //       contact    = "CONTACT" contparam ":" text CRLF
-optional<Contact> read_contact(istream &is) {
+optional<Contact> IcalParser::contact() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_token(is, "CONTACT") &&
-                read_contparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
+                token("CONTACT") &&
+                contparam() &&
+                token(":") &&
+                text() &&
+                newline();
         if (!match)
                 return nullopt;
         ptran.commit();
@@ -3574,7 +3845,7 @@ optional<Contact> read_contact(istream &is) {
 }
 //       exdtval    = date-time / date
 //       ;Value MUST match value type
-bool read_exdtval(istream &is) {
+bool IcalParser::exdtval() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3596,7 +3867,7 @@ bool read_exdtval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_exdtparam(istream &is) {
+bool IcalParser::exdtparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3604,21 +3875,21 @@ bool read_exdtparam(istream &is) {
         return true;
 }
 //       exdate     = "EXDATE" exdtparam ":" exdtval *("," exdtval) CRLF
-optional<ExDate> read_exdate(istream &is) {
+optional<ExDate> IcalParser::exdate() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto match =
-                read_token(is, "EXDATE") &&
-                read_exdtparam(is) &&
-                read_token(is, ":") &&
-                read_exdtval(is);
+                token("EXDATE") &&
+                exdtparam() &&
+                token(":") &&
+                exdtval();
         if (!match)
                 return nullopt;
-        while (read_token(is, ",")) {
-                if (!read_exdtval(is))
+        while (token(",")) {
+                if (!exdtval())
                         return nullopt;
         }
-        if (!read_newline(is))
+        if (!newline())
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
@@ -3627,10 +3898,10 @@ optional<ExDate> read_exdate(istream &is) {
 //       extdata    = text
 //       ;Textual exception data.  For example, the offending property
 //       ;name and value or complete property line.
-bool read_extdata(istream &is) {
+bool IcalParser::extdata() {
         CALLSTACK;
         save_input_pos ptran(is);
-        if (!read_text(is))
+        if (!text())
                 return false;
         ptran.commit();
         return true;
@@ -3638,10 +3909,10 @@ bool read_extdata(istream &is) {
 
 //       statdesc   = text
 //       ;Textual status description
-bool read_statdesc(istream &is) {
+bool IcalParser::statdesc() {
         CALLSTACK;
         save_input_pos ptran(is);
-        if (!read_text(is))
+        if (!text())
                 return false;
         ptran.commit();
         return true;
@@ -3649,7 +3920,7 @@ bool read_statdesc(istream &is) {
 
 //       statcode   = 1*DIGIT 1*2("." 1*DIGIT)
 //       ;Hierarchical, numeric return status code
-bool read_statcode(istream &is) {
+bool IcalParser::statcode() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3670,13 +3941,13 @@ bool read_statcode(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_rstatparam(istream &is) {
+bool IcalParser::rstatparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 const auto match =
-                        read_languageparam(is) ||
-                        read_other_param(is);
+                        languageparam() ||
+                        other_param();
                 if (!match)
                         return false;
         }
@@ -3686,17 +3957,17 @@ bool read_rstatparam(istream &is) {
 
 //       rstatus    = "REQUEST-STATUS" rstatparam ":"
 //                    statcode ";" statdesc [";" extdata]
-optional<RStatus> read_rstatus(istream &is) {
+optional<RStatus> IcalParser::rstatus() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "REQUEST-STATUS") &&
-                read_rstatparam(is) &&
-                read_token(is, ":") &&
-                read_statcode(is) &&
-                read_token(is, ";") &&
-                read_statdesc(is) &&
-                (read_token(is, ";") ? read_extdata(is) : true);
+                token("REQUEST-STATUS") &&
+                rstatparam() &&
+                token(":") &&
+                statcode() &&
+                token(";") &&
+                statdesc() &&
+                (token(";") ? extdata() : true);
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -3710,23 +3981,23 @@ optional<RStatus> read_rstatus(istream &is) {
 //                                        ; iCalendar relationship type
 //                          / x-name)     ; A non-standard, experimental
 //                                        ; relationship type
-optional<RelTypeParam> read_reltypeparam(istream &is) {
+optional<RelTypeParam> IcalParser::reltypeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         RelTypeParam ret;
 
-        if (!read_token(is, "RELTYPE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("RELTYPE")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "PARENT")) {
+        if (auto v = token("PARENT")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "CHILD")) {
+        } else if (auto v = token("CHILD")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "SIBLING")) {
+        } else if (auto v = token("SIBLING")) {
                 ret.value = *v;
-        } else if (auto v = read_iana_token(is)) {
+        } else if (auto v = iana_token()) {
                 ret.value = *v;
-        } else if (auto v = read_x_name(is)) {
+        } else if (auto v = x_name()) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -3749,13 +4020,13 @@ optional<RelTypeParam> read_reltypeparam(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_relparam(istream &is) {
+bool IcalParser::relparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_token(is, ";")) {
+        while (token(";")) {
                 const auto match =
-                        read_reltypeparam(is) ||
-                        read_other_param(is);
+                        reltypeparam() ||
+                        other_param();
                 if (!match)
                         return false;
         }
@@ -3763,15 +4034,15 @@ bool read_relparam(istream &is) {
         return true;
 }
 //       related    = "RELATED-TO" relparam ":" text CRLF
-optional<Related> read_related(istream &is) {
+optional<Related> IcalParser::related() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "RELATED-TO") &&
-                read_relparam(is) &&
-                read_token(is, ":") &&
-                read_text(is) &&
-                read_newline(is);
+                token("RELATED-TO") &&
+                relparam() &&
+                token(":") &&
+                text() &&
+                newline();
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -3791,7 +4062,7 @@ optional<Related> read_related(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_resrcparam(istream &is) {
+bool IcalParser::resrcparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
         save_input_pos ptran(is);
@@ -3799,30 +4070,30 @@ bool read_resrcparam(istream &is) {
         return true;
 }
 //       resources  = "RESOURCES" resrcparam ":" text *("," text) CRLF
-optional<Resources> read_resources(istream &is) {
+optional<Resources> IcalParser::resources() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "RESOURCES") &&
-                read_resrcparam(is) &&
-                read_token(is, ":") &&
-                read_text(is);
+                token("RESOURCES") &&
+                resrcparam() &&
+                token(":") &&
+                text();
         if (!success)
                 return nullopt;
-        while (read_token(is, ",")) {
-                if (!read_text(is))
+        while (token(",")) {
+                if (!text())
                         return nullopt;
         }
-        if (!read_newline(is))
+        if (!newline())
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
 }
 //       rdtval     = date-time / date / period
 //       ;Value MUST match value type
-bool read_rdtval(istream &is) {
+bool IcalParser::rdtval() {
         CALLSTACK;
-        return read_date_time(is) || read_date(is) || read_period(is);
+        return date_time() || date() || period();
 }
 //       rdtparam   = *(
 //                  ;
@@ -3838,19 +4109,19 @@ bool read_rdtval(istream &is) {
 //                  (";" other-param)
 //                  ;
 //                  )
-bool read_rdtparam_single(istream &is) {
+bool IcalParser::rdtparam_single() {
         CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE" / "PERIOD"))
         {
                 save_input_pos ptran(is);
                 const auto match =
-                        read_token(is, ";") &&
-                        read_token(is, "VALUE") &&
-                        read_token(is, "=") &&
+                        token(";") &&
+                        token("VALUE") &&
+                        token("=") &&
                         (
-                                read_date_time(is) ||
-                                read_date(is) ||
-                                read_period(is)
+                                date_time() ||
+                                date() ||
+                                period()
                         );
                 if (match) {
                         ptran.commit();
@@ -3861,8 +4132,8 @@ bool read_rdtparam_single(istream &is) {
         {
                 save_input_pos ptran(is);
                 const auto match =
-                        read_token(is, ";") &&
-                        read_tzidparam(is);
+                        token(";") &&
+                        tzidparam();
                 if (match) {
                         ptran.commit();
                         return true;
@@ -3872,8 +4143,8 @@ bool read_rdtparam_single(istream &is) {
         {
                 save_input_pos ptran(is);
                 const auto match =
-                        read_token(is, ";") &&
-                        read_other_param(is);
+                        token(";") &&
+                        other_param();
                 if (match) {
                         ptran.commit();
                         return true;
@@ -3881,30 +4152,30 @@ bool read_rdtparam_single(istream &is) {
         }
         return false;
 }
-bool read_rdtparam(istream &is) {
+bool IcalParser::rdtparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        while (read_rdtparam_single(is)) {
+        while (rdtparam_single()) {
         }
         ptran.commit();
         return true;
 }
 //       rdate      = "RDATE" rdtparam ":" rdtval *("," rdtval) CRLF
-optional<RDate> read_rdate(istream &is) {
+optional<RDate> IcalParser::rdate() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_token(is, "RDATE") &&
-                read_rdtparam(is) &&
-                read_token(is, ":") &&
-                read_rdtval(is);
+                token("RDATE") &&
+                rdtparam() &&
+                token(":") &&
+                rdtval();
         if (!success)
                 return nullopt;
-        while (read_token(is, ",")) {
-                if (!read_rdtval(is))
+        while (token(",")) {
+                if (!rdtval())
                         return nullopt;
         }
-        if (!read_newline(is))
+        if (!newline())
                 return nullopt;
         ptran.commit();
         NOT_IMPLEMENTED;
@@ -3970,58 +4241,58 @@ optional<RDate> read_rdate(istream &is) {
 //                  contact / exdate / rstatus / related /
 //                  resources / rdate / x-prop / iana-prop
 //               )
-optional<EventProp> read_eventprop_single(istream &is) {
+optional<EventProp> IcalParser::eventprop_single() {
         CALLSTACK;
         save_input_pos ptran(is);
         EventProp ret;
-        if (auto v = read_dtstamp(is)) ret = *v;
-        else if (auto v = read_uid(is)) ret = *v;
+        if (auto v = dtstamp()) ret = *v;
+        else if (auto v = uid()) ret = *v;
 
-        else if (auto v = read_dtstart(is)) ret = *v;
+        else if (auto v = dtstart()) ret = *v;
 
-        else if (auto v = read_class(is)) ret = *v;
-        else if (auto v = read_created(is)) ret = *v;
-        else if (auto v = read_description(is)) ret = *v;
-        else if (auto v = read_geo(is)) ret = *v;
-        else if (auto v = read_last_mod(is)) ret = *v;
-        else if (auto v = read_location(is)) ret = *v;
-        else if (auto v = read_organizer(is)) ret = *v;
-        else if (auto v = read_priority(is)) ret = *v;
-        else if (auto v = read_seq(is)) ret = *v;
-        else if (auto v = read_status(is)) ret = *v;
-        else if (auto v = read_summary(is)) ret = *v;
-        else if (auto v = read_transp(is)) ret = *v;
-        else if (auto v = read_url(is)) ret = *v;
-        else if (auto v = read_recurid(is)) ret = *v;
+        else if (auto v = class_()) ret = *v;
+        else if (auto v = created()) ret = *v;
+        else if (auto v = description()) ret = *v;
+        else if (auto v = geo()) ret = *v;
+        else if (auto v = last_mod()) ret = *v;
+        else if (auto v = location()) ret = *v;
+        else if (auto v = organizer()) ret = *v;
+        else if (auto v = priority()) ret = *v;
+        else if (auto v = seq()) ret = *v;
+        else if (auto v = status()) ret = *v;
+        else if (auto v = summary()) ret = *v;
+        else if (auto v = transp()) ret = *v;
+        else if (auto v = url()) ret = *v;
+        else if (auto v = recurid()) ret = *v;
 
-        else if (auto v = read_rrule(is)) ret = *v;
+        else if (auto v = rrule()) ret = *v;
 
-        else if (auto v = read_dtend(is)) ret = *v;
-        else if (auto v = read_duration(is)) ret = *v;
+        else if (auto v = dtend()) ret = *v;
+        else if (auto v = duration()) ret = *v;
 
-        else if (auto v = read_attach(is)) ret = *v;
-        else if (auto v = read_attendee(is)) ret = *v;
-        else if (auto v = read_categories (is)) ret = *v;
-        else if (auto v = read_comment(is)) ret = *v;
-        else if (auto v = read_contact(is)) ret = *v;
-        else if (auto v = read_exdate(is)) ret = *v;
-        else if (auto v = read_rstatus(is)) ret = *v;
-        else if (auto v = read_related(is)) ret = *v;
-        else if (auto v = read_resources(is)) ret = *v;
-        else if (auto v = read_rdate(is)) ret = *v;
-        else if (auto v = read_x_prop(is)) ret = *v;
-        else if (auto v = read_iana_prop(is)) ret = *v;
+        else if (auto v = attach()) ret = *v;
+        else if (auto v = attendee()) ret = *v;
+        else if (auto v = categories ()) ret = *v;
+        else if (auto v = comment()) ret = *v;
+        else if (auto v = contact()) ret = *v;
+        else if (auto v = exdate()) ret = *v;
+        else if (auto v = rstatus()) ret = *v;
+        else if (auto v = related()) ret = *v;
+        else if (auto v = resources()) ret = *v;
+        else if (auto v = rdate()) ret = *v;
+        else if (auto v = x_prop()) ret = *v;
+        else if (auto v = iana_prop()) ret = *v;
 
         else return nullopt;
 
         ptran.commit();
         return ret;
 }
-optional<vector<EventProp>> read_eventprop(istream &is) {
+optional<vector<EventProp>> IcalParser::eventprop() {
         CALLSTACK;
         save_input_pos ptran(is);
         vector<EventProp> ret;
-        while (auto v = read_eventprop_single(is)) {
+        while (auto v = eventprop_single()) {
                 ret.push_back(*v);
         }
 
@@ -4032,21 +4303,21 @@ optional<vector<EventProp>> read_eventprop(istream &is) {
 //       eventc     = "BEGIN" ":" "VEVENT" CRLF
 //                    eventprop *alarmc
 //                    "END" ":" "VEVENT" CRLF
-optional<EventComp> read_eventc(istream &is) {
+optional<EventComp> IcalParser::eventc() {
         CALLSTACK;
         save_input_pos ptran(is);
         EventComp ret;
 
-        if (!read_key_value(is, "BEGIN", "VEVENT")) return nullopt;
+        if (!key_value("BEGIN", "VEVENT")) return nullopt;
 
-        if (auto v = read_eventprop(is)) ret.properties = *v;
+        if (auto v = eventprop()) ret.properties = *v;
         else return nullopt;
 
-        while(auto v = read_alarmc(is)) {
+        while(auto v = alarmc()) {
                 ret.alarms.push_back(*v);
         }
 
-        if (!read_key_value(is, "END", "VEVENT")) return nullopt;
+        if (!key_value("END", "VEVENT")) return nullopt;
 
         ptran.commit();
         return ret;
@@ -4090,7 +4361,7 @@ optional<EventComp> read_eventc(istream &is) {
 //                  rdate / x-prop / iana-prop
 //                  ;
 //                  )
-bool read_todoprop(istream &is) {
+bool IcalParser::todoprop() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4098,20 +4369,20 @@ bool read_todoprop(istream &is) {
 //       todoc      = "BEGIN" ":" "VTODO" CRLF
 //                    todoprop *alarmc
 //                    "END" ":" "VTODO" CRLF
-optional<TodoComp> read_todoc(istream &is) {
+optional<TodoComp> IcalParser::todoc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
-                read_key_value(is, "BEGIN", "VTODO") &&
-                read_todoprop(is);
+                key_value("BEGIN", "VTODO") &&
+                todoprop();
         if (!success_pro)
                 return nullopt;
 
-        while(read_alarmc(is)) {
+        while(alarmc()) {
         }
 
         const auto success_epi =
-                read_key_value(is, "END", "VTODO") ;
+                key_value("END", "VTODO") ;
         if (!success_epi)
                 return nullopt;
 
@@ -4147,7 +4418,7 @@ optional<TodoComp> read_todoc(istream &is) {
 //                  rstatus / x-prop / iana-prop
 //                  ;
 //                  )
-bool read_jourprop(istream &is) {
+bool IcalParser::jourprop() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4155,13 +4426,13 @@ bool read_jourprop(istream &is) {
 //       journalc   = "BEGIN" ":" "VJOURNAL" CRLF
 //                    jourprop
 //                    "END" ":" "VJOURNAL" CRLF
-optional<JournalComp> read_journalc(istream &is) {
+optional<JournalComp> IcalParser::journalc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_key_value(is, "BEGIN", "VJOURNAL") &&
-                read_jourprop(is) &&
-                read_key_value(is, "END", "VJOURNAL") ;
+                key_value("BEGIN", "VJOURNAL") &&
+                jourprop() &&
+                key_value("END", "VJOURNAL") ;
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -4189,7 +4460,7 @@ optional<JournalComp> read_journalc(istream &is) {
 //                  iana-prop
 //                  ;
 //                  )
-bool read_fbprop(istream &is) {
+bool IcalParser::fbprop() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4197,13 +4468,13 @@ bool read_fbprop(istream &is) {
 //       freebusyc  = "BEGIN" ":" "VFREEBUSY" CRLF
 //                    fbprop
 //                    "END" ":" "VFREEBUSY" CRLF
-optional<FreeBusyComp> read_freebusyc(istream &is) {
+optional<FreeBusyComp> IcalParser::freebusyc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                read_key_value(is, "BEGIN", "VFREEBUSY") &&
-                read_fbprop(is) &&
-                read_key_value(is, "END", "VFREEBUSY") ;
+                key_value("BEGIN", "VFREEBUSY") &&
+                fbprop() &&
+                key_value("END", "VFREEBUSY") ;
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -4211,12 +4482,12 @@ optional<FreeBusyComp> read_freebusyc(istream &is) {
         //return true;
 }
 
-bool read_tzid(istream &is) {
+bool IcalParser::tzid() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
 
-bool read_tzurl(istream &is) {
+bool IcalParser::tzurl() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4239,7 +4510,7 @@ bool read_tzurl(istream &is) {
 //                    comment / rdate / tzname / x-prop / iana-prop
 //                    ;
 //                    )
-bool read_tzprop(istream &is) {
+bool IcalParser::tzprop() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4247,7 +4518,7 @@ bool read_tzprop(istream &is) {
 //       daylightc  = "BEGIN" ":" "DAYLIGHT" CRLF
 //                    tzprop
 //                    "END" ":" "DAYLIGHT" CRLF
-bool read_daylightc(istream &is) {
+bool IcalParser::daylightc() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4255,7 +4526,7 @@ bool read_daylightc(istream &is) {
 //       standardc  = "BEGIN" ":" "STANDARD" CRLF
 //                    tzprop
 //                    "END" ":" "STANDARD" CRLF
-bool read_standardc(istream &is) {
+bool IcalParser::standardc() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4285,26 +4556,26 @@ bool read_standardc(istream &is) {
 //                    ;
 //                    )
 //                    "END" ":" "VTIMEZONE" CRLF
-optional<TimezoneComp> read_timezonec(istream &is) {
+optional<TimezoneComp> IcalParser::timezonec() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
-                read_key_value(is, "BEGIN", "VTIMEZONE") &&
-                read_todoprop(is);
+                key_value("BEGIN", "VTIMEZONE") &&
+                todoprop();
         if (!success_pro)
                 return nullopt;
 
-        while(read_tzid(is) ||
-              read_last_mod(is) ||
-              read_tzurl(is) ||
-              read_standardc(is) ||
-              read_daylightc(is) ||
-              read_x_prop(is) ||
-              read_iana_prop(is)) {
+        while(tzid() ||
+              last_mod() ||
+              tzurl() ||
+              standardc() ||
+              daylightc() ||
+              x_prop() ||
+              iana_prop()) {
         }
 
         const auto success_epi =
-                read_key_value(is, "END", "VTIMEZONE") ;
+                key_value("END", "VTIMEZONE") ;
         if (!success_epi)
                 return nullopt;
 
@@ -4316,27 +4587,27 @@ optional<TimezoneComp> read_timezonec(istream &is) {
 //       iana-comp  = "BEGIN" ":" iana-token CRLF
 //                    1*contentline
 //                    "END" ":" iana-token CRLF
-optional<IanaComp> read_iana_comp(istream &is) {
+optional<IanaComp> IcalParser::iana_comp() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
-                read_token(is, "BEGIN") &&
-                read_token(is, ":") &&
-                read_iana_token(is) &&
-                read_newline(is);
+                token("BEGIN") &&
+                token(":") &&
+                iana_token() &&
+                newline();
         if (!success_pro)
                 return nullopt;
 
-        if (!read_contentline(is))
+        if (!contentline())
                 return nullopt;
-        while(read_contentline(is)) {
+        while(contentline()) {
         }
 
         const auto success_epi =
-                read_token(is, "END") &&
-                read_token(is, ":") &&
-                read_iana_token(is) &&
-                read_newline(is);
+                token("END") &&
+                token(":") &&
+                iana_token() &&
+                newline();
         if (!success_epi)
                 return nullopt;
 
@@ -4348,27 +4619,27 @@ optional<IanaComp> read_iana_comp(istream &is) {
 //       x-comp     = "BEGIN" ":" x-name CRLF
 //                    1*contentline
 //                    "END" ":" x-name CRLF
-optional<XComp> read_x_comp(istream &is) {
+optional<XComp> IcalParser::x_comp() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
-                read_token(is, "BEGIN") &&
-                read_token(is, ":") &&
-                read_x_name(is) &&
-                read_newline(is);
+                token("BEGIN") &&
+                token(":") &&
+                x_name() &&
+                newline();
         if (!success_pro)
                 return nullopt;
 
-        if (!read_contentline(is))
+        if (!contentline())
                 return nullopt;
-        while(read_contentline(is)) {
+        while(contentline()) {
         }
 
         const auto success_epi =
-                read_token(is, "END") &&
-                read_token(is, ":") &&
-                read_x_name(is) &&
-                read_newline(is);
+                token("END") &&
+                token(":") &&
+                x_name() &&
+                newline();
         if (!success_epi)
                 return nullopt;
 
@@ -4380,33 +4651,33 @@ optional<XComp> read_x_comp(istream &is) {
 //       component  = 1*(eventc / todoc / journalc / freebusyc /
 //                    timezonec / iana-comp / x-comp)
 //
-optional<Component> read_component_single(istream &is) {
+optional<Component> IcalParser::component_single() {
         CALLSTACK;
         save_input_pos ptran(is);
         Component ret;
-        if (auto v = read_eventc(is)) ret = *v;
-        else if (auto v = read_todoc(is)) ret = *v;
-        else if (auto v = read_journalc(is)) ret = *v;
-        else if (auto v = read_freebusyc(is)) ret = *v;
-        else if (auto v = read_timezonec(is)) ret = *v;
-        else if (auto v = read_iana_comp(is)) ret = *v;
-        else if (auto v = read_x_comp(is)) ret = *v;
+        if (auto v = eventc()) ret = *v;
+        else if (auto v = todoc()) ret = *v;
+        else if (auto v = journalc()) ret = *v;
+        else if (auto v = freebusyc()) ret = *v;
+        else if (auto v = timezonec()) ret = *v;
+        else if (auto v = iana_comp()) ret = *v;
+        else if (auto v = x_comp()) ret = *v;
         else return optional<Component>();
         ptran.commit();
         return ret;
 }
-Component expect_component_single(istream &is) {
+Component IcalParser::expect_component_single() {
         CALLSTACK;
-        if (auto v = read_component_single(is))
+        if (auto v = component_single())
                 return *v;
         throw syntax_error(is.tellg());
 }
-vector<Component> expect_component(istream &is) {
+vector<Component> IcalParser::expect_component() {
         CALLSTACK;
         save_input_pos ptran(is);
         vector<Component> ret;
-        ret.push_back(expect_component_single(is));
-        while(auto v = read_component_single(is)) {
+        ret.push_back(expect_component_single());
+        while(auto v = component_single()) {
                 ret.push_back(*v);
         }
         ptran.commit();
@@ -4414,24 +4685,24 @@ vector<Component> expect_component(istream &is) {
 }
 
 // altrepparam = "ALTREP" "=" DQUOTE uri DQUOTE
-optional<AltRepParam> read_altrepparam(istream &is) {
+optional<AltRepParam> IcalParser::altrepparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        if (!read_token(is, "ALTREP")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
-        const auto v = read_quoted_string(is);
+        if (!token("ALTREP")) return nullopt;
+        if (!token("=")) return nullopt;
+        const auto v = quoted_string();
         if (!v) return nullopt;
         ptran.commit();
         return {{*v}};
 }
 
 // cnparam    = "CN" "=" param-value
-optional<CnParam> read_cnparam(istream &is) {
+optional<CnParam> IcalParser::cnparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        if (!read_token(is, "CN")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
-        const auto v = read_param_value(is);
+        if (!token("CN")) return nullopt;
+        if (!token("=")) return nullopt;
+        const auto v = param_value();
         if (!v) return nullopt;
         ptran.commit();
         return {{*v}};
@@ -4447,20 +4718,20 @@ optional<CnParam> read_cnparam(istream &is) {
 //                         / iana-token)    ; Other IANA-registered
 //                                          ; type
 //       ; Default is INDIVIDUAL
-optional<CuTypeParam> read_cutypeparam(istream &is) {
+optional<CuTypeParam> IcalParser::cutypeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
-        if (!read_token(is, "CUTYPE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("CUTYPE")) return nullopt;
+        if (!token("=")) return nullopt;
 
         string val;
-        if (auto v = read_token(is, "INDIVIDUAL")) val = *v;
-        else if (read_token(is, "GROUP")) val = *v;
-        else if (read_token(is, "RESOURCE")) val = *v;
-        else if (read_token(is, "ROOM")) val = *v;
-        else if (read_token(is, "UNKNOWN")) val = *v;
-        else if (read_x_name(is)) val = *v;
-        else if (read_iana_token(is)) val = *v;
+        if (auto v = token("INDIVIDUAL")) val = *v;
+        else if (token("GROUP")) val = *v;
+        else if (token("RESOURCE")) val = *v;
+        else if (token("ROOM")) val = *v;
+        else if (token("UNKNOWN")) val = *v;
+        else if (x_name()) val = *v;
+        else if (iana_token()) val = *v;
         else return nullopt;
 
         ptran.commit();
@@ -4469,21 +4740,21 @@ optional<CuTypeParam> read_cutypeparam(istream &is) {
 
 //      delfromparam       = "DELEGATED-FROM" "=" DQUOTE cal-address DQUOTE
 //                           *("," DQUOTE cal-address DQUOTE)
-optional<DelFromParam> read_delfromparam(istream &is) {
+optional<DelFromParam> IcalParser::delfromparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DelFromParam ret;
 
-        if (!read_token(is, "DELEGATED-FROM")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("DELEGATED-FROM")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_quoted_string(is)) {
+        if (auto v = quoted_string()) {
                 ret.values.push_back(*v);
         } else {
                 return nullopt;
         }
-        while (read_token(is, ",")) {
-                if (auto v = read_quoted_string(is)) {
+        while (token(",")) {
+                if (auto v = quoted_string()) {
                         ret.values.push_back(*v);
                 } else {
                         return nullopt;
@@ -4495,21 +4766,21 @@ optional<DelFromParam> read_delfromparam(istream &is) {
 
 //      deltoparam = "DELEGATED-TO" "=" DQUOTE cal-address DQUOTE
 //                    *("," DQUOTE cal-address DQUOTE)
-optional<DelToParam> read_deltoparam(istream &is) {
+optional<DelToParam> IcalParser::deltoparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DelToParam ret;
 
-        if (!read_token(is, "DELEGATED-TO")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("DELEGATED-TO")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_quoted_string(is)) {
+        if (auto v = quoted_string()) {
                 ret.values.push_back(*v);
         } else {
                 return nullopt;
         }
-        while (read_token(is, ",")) {
-                if (auto v = read_quoted_string(is)) {
+        while (token(",")) {
+                if (auto v = quoted_string()) {
                         ret.values.push_back(*v);
                 } else {
                         return nullopt;
@@ -4520,15 +4791,15 @@ optional<DelToParam> read_deltoparam(istream &is) {
 }
 
 //      dirparam   = "DIR" "=" DQUOTE uri DQUOTE
-optional<DirParam> read_dirparam(istream &is) {
+optional<DirParam> IcalParser::dirparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         DirParam ret;
 
-        if (!read_token(is, "DIR")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("DIR")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_quoted_string(is)) {
+        if (auto v = quoted_string()) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4542,16 +4813,16 @@ optional<DirParam> read_dirparam(istream &is) {
 //          ( "8BIT"   ; "8bit" text encoding is defined in [RFC2045]
 //          / "BASE64" ; "BASE64" binary encoding format is defined in [RFC4648]
 //          )
-optional<EncodingParam> read_encodingparam(istream &is) {
+optional<EncodingParam> IcalParser::encodingparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         EncodingParam ret;
-        if (!read_token(is, "ENCODING")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("ENCODING")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "8BIT")) {
+        if (auto v = token("8BIT")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "BASE64")) {
+        } else if (auto v = token("BASE64")) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4563,13 +4834,13 @@ optional<EncodingParam> read_encodingparam(istream &is) {
 //       fmttypeparam = "FMTTYPE" "=" type-name "/" subtype-name
 //                      ; Where "type-name" and "subtype-name" are
 //                      ; defined in Section 4.2 of [RFC4288].
-optional<FmtTypeParam> read_fmttypeparam(istream &is) {
+optional<FmtTypeParam> IcalParser::fmttypeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         FmtTypeParam ret;
 
-        if (!read_token(is, "FMTTYPE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("FMTTYPE")) return nullopt;
+        if (!token("=")) return nullopt;
 
         if (auto v = read_type_name(is)) {
                 ret.value = *v;
@@ -4592,24 +4863,24 @@ optional<FmtTypeParam> read_fmttypeparam(istream &is) {
 //                          / iana-token
 //                          )
 //                ; Some other IANA-registered iCalendar free/busy type.
-optional<FbTypeParam> read_fbtypeparam(istream &is) {
+optional<FbTypeParam> IcalParser::fbtypeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         FbTypeParam ret;
-        if (!read_token(is, "FBTYPE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("FBTYPE")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "FREE")) {
+        if (auto v = token("FREE")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "BUSY")) {
+        } else if (auto v = token("BUSY")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "BUSY-UNAVAILABLE")) {
+        } else if (auto v = token("BUSY-UNAVAILABLE")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "BUSY-TENTATIVE")) {
+        } else if (auto v = token("BUSY-TENTATIVE")) {
                 ret.value = *v;
-        } else if (auto v = read_x_name(is)) {
+        } else if (auto v = x_name()) {
                 ret.value = *v;
-        } else if (auto v = read_iana_token(is)) {
+        } else if (auto v = iana_token()) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4622,12 +4893,12 @@ optional<FbTypeParam> read_fbtypeparam(istream &is) {
 //
 //       language = Language-Tag
 //                  ; As defined in [RFC5646].
-optional<LanguageParam> read_languageparam(istream &is) {
+optional<LanguageParam> IcalParser::languageparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         LanguageParam ret;
-        if (!read_token(is, "LANGUAGE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("LANGUAGE")) return nullopt;
+        if (!token("=")) return nullopt;
 
         if (auto v = read_language_tag(is)) {
                 ret.value = *v;
@@ -4640,21 +4911,21 @@ optional<LanguageParam> read_languageparam(istream &is) {
 
 //       memberparam        = "MEMBER" "=" DQUOTE cal-address DQUOTE
 //                            *("," DQUOTE cal-address DQUOTE)
-optional<MemberParam> read_memberparam(istream &is) {
+optional<MemberParam> IcalParser::memberparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         MemberParam ret;
 
-        if (!read_token(is, "MEMBER")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("MEMBER")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_cal_address(is)) {
+        if (auto v = cal_address()) {
                 ret.values.push_back(*v);
         } else {
                 return nullopt;
         }
-        while (read_token(is, ",")) {
-                if (auto v = read_cal_address(is)) {
+        while (token(",")) {
+                if (auto v = cal_address()) {
                         ret.values.push_back(*v);
                 } else {
                         return nullopt;
@@ -4673,7 +4944,7 @@ optional<MemberParam> read_memberparam(istream &is) {
 //                                             ; status
 //       ; These are the participation statuses for a "VJOURNAL".
 //       ; Default is NEEDS-ACTION.
-optional<PartStatJour> read_partstat_jour(istream &is) {
+optional<PartStatJour> IcalParser::partstat_jour() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4695,7 +4966,7 @@ optional<PartStatJour> read_partstat_jour(istream &is) {
 //                                             ; status
 //       ; These are the participation statuses for a "VTODO".
 //       ; Default is NEEDS-ACTION.
-optional<PartStatTodo> read_partstat_todo(istream &is) {
+optional<PartStatTodo> IcalParser::partstat_todo() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4711,7 +4982,7 @@ optional<PartStatTodo> read_partstat_todo(istream &is) {
 //                                             ; status
 //       ; These are the participation statuses for a "VEVENT".
 //       ; Default is NEEDS-ACTION.
-optional<PartStatEvent> read_partstat_event(istream &is) {
+optional<PartStatEvent> IcalParser::partstat_event() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4720,19 +4991,19 @@ optional<PartStatEvent> read_partstat_event(istream &is) {
 //                         (partstat-event
 //                        / partstat-todo
 //                        / partstat-jour)
-optional<PartStatParam> read_partstatparam(istream &is) {
+optional<PartStatParam> IcalParser::partstatparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         PartStatParam ret;
 
-        if (!read_token(is, "PARTSTAT")) return optional<PartStatParam>();
-        if (!read_token(is, "=")) return optional<PartStatParam>();
+        if (!token("PARTSTAT")) return optional<PartStatParam>();
+        if (!token("=")) return optional<PartStatParam>();
 
-        if (auto v = read_partstat_event(is)) {
+        if (auto v = partstat_event()) {
                 ret = *v;
-        } else if (auto v = read_partstat_todo(is)) {
+        } else if (auto v = partstat_todo()) {
                 ret = *v;
-        } else if (auto v = read_partstat_jour(is)) {
+        } else if (auto v = partstat_jour()) {
                 ret = *v;
         } else {
                 return optional<PartStatParam>();
@@ -4744,15 +5015,15 @@ optional<PartStatParam> read_partstatparam(istream &is) {
 //       rangeparam = "RANGE" "=" "THISANDFUTURE"
 //       ; To specify the instance specified by the recurrence identifier
 //       ; and all subsequent recurrence instances.
-optional<RangeParam> read_rangeparam(istream &is) {
+optional<RangeParam> IcalParser::rangeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         RangeParam ret;
 
-        if (!read_token(is, "RANGE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("RANGE")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "THISANDFUTURE")) {
+        if (auto v = token("THISANDFUTURE")) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4765,17 +5036,17 @@ optional<RangeParam> read_rangeparam(istream &is) {
 //       trigrelparam       = "RELATED" "="
 //                          ( "START"       ; Trigger off of start
 //                          / "END")        ; Trigger off of end
-optional<TrigRelParam> read_trigrelparam(istream &is) {
+optional<TrigRelParam> IcalParser::trigrelparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         TrigRelParam ret;
 
-        if (!read_token(is, "RELATED")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("RELATED")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "START")) {
+        if (auto v = token("START")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "END")) {
+        } else if (auto v = token("END")) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4797,25 +5068,25 @@ optional<TrigRelParam> read_trigrelparam(istream &is) {
 //                  / x-name              ; Experimental role
 //                  / iana-token)         ; Other IANA role
 //       ; Default is REQ-PARTICIPANT
-optional<RoleParam> read_roleparam(istream &is) {
+optional<RoleParam> IcalParser::roleparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         RoleParam ret;
 
-        if (!read_token(is, "ROLE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("ROLE")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "CHAIR")) {
+        if (auto v = token("CHAIR")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "REQ-PARTICIPANT")) {
+        } else if (auto v = token("REQ-PARTICIPANT")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "OPT-PARTICIPANT")) {
+        } else if (auto v = token("OPT-PARTICIPANT")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "NON-PARTICIPANT")) {
+        } else if (auto v = token("NON-PARTICIPANT")) {
                 ret.value = *v;
-        } else if (auto v = read_x_name(is)) {
+        } else if (auto v = x_name()) {
                 ret.value = *v;
-        } else if (auto v = read_iana_token(is)) {
+        } else if (auto v = iana_token()) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4826,17 +5097,17 @@ optional<RoleParam> read_roleparam(istream &is) {
 
 //       rsvpparam = "RSVP" "=" ("TRUE" / "FALSE")
 //       ; Default is FALSE
-optional<RsvpParam> read_rsvpparam(istream &is) {
+optional<RsvpParam> IcalParser::rsvpparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         RsvpParam ret;
 
-        if (!read_token(is, "RSVP")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("RSVP")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_token(is, "TRUE")) {
+        if (auto v = token("TRUE")) {
                 ret.value = *v;
-        } else if (auto v = read_token(is, "FALSE")) {
+        } else if (auto v = token("FALSE")) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4847,15 +5118,15 @@ optional<RsvpParam> read_rsvpparam(istream &is) {
 }
 
 //       sentbyparam        = "SENT-BY" "=" DQUOTE cal-address DQUOTE
-optional<SentByParam> read_sentbyparam(istream &is) {
+optional<SentByParam> IcalParser::sentbyparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         SentByParam ret;
 
-        if (!read_token(is, "SENT-BY")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("SENT-BY")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_quoted_string(is)) {
+        if (auto v = quoted_string()) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -4866,25 +5137,25 @@ optional<SentByParam> read_sentbyparam(istream &is) {
 }
 
 //       tzidprefix = "/"
-optional<string> read_tzidprefix(istream &is) {
+optional<string> IcalParser::tzidprefix() {
         CALLSTACK;
-        return read_token(is, "/");
+        return token("/");
 }
 
 //       tzidparam  = "TZID" "=" [tzidprefix] paramtext
-optional<TzIdParam> read_tzidparam(istream &is) {
+optional<TzIdParam> IcalParser::tzidparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         TzIdParam ret;
 
-        if (!read_token(is, "TZID")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("TZID")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_tzidprefix(is)) {
+        if (auto v = tzidprefix()) {
                 ret.value += *v;
         }
 
-        if (auto v = read_paramtext(is)) {
+        if (auto v = paramtext()) {
                 ret.value += *v;
         } else {
                 return nullopt;
@@ -4912,37 +5183,37 @@ optional<TzIdParam> read_tzidparam(istream &is) {
 //                  ; Some experimental iCalendar value type.
 //                  / iana-token)
 //                  ; Some other IANA-registered iCalendar value type.
-optional<ValueType> read_valuetype(istream &is) {
+optional<ValueType> IcalParser::valuetype() {
         CALLSTACK;
-        if (auto v = read_token(is, "BINARY")) return {{*v}};
-        if (auto v = read_token(is, "BOOLEAN")) return {{*v}};
-        if (auto v = read_token(is, "CAL-ADDRESS")) return {{*v}};
-        if (auto v = read_token(is, "DATE")) return {{*v}};
-        if (auto v = read_token(is, "DATE-TIME")) return {{*v}};
-        if (auto v = read_token(is, "DURATION")) return {{*v}};
-        if (auto v = read_token(is, "FLOAT")) return {{*v}};
-        if (auto v = read_token(is, "INTEGER")) return {{*v}};
-        if (auto v = read_token(is, "PERIOD")) return {{*v}};
-        if (auto v = read_token(is, "RECUR")) return {{*v}};
-        if (auto v = read_token(is, "TEXT")) return {{*v}};
-        if (auto v = read_token(is, "TIME")) return {{*v}};
-        if (auto v = read_token(is, "URI")) return {{*v}};
-        if (auto v = read_token(is, "UTC-OFFSET")) return {{*v}};
-        if (auto v = read_x_name(is)) return {{*v}};
-        if (auto v = read_iana_token(is)) return {{*v}};
+        if (auto v = token("BINARY")) return {{*v}};
+        if (auto v = token("BOOLEAN")) return {{*v}};
+        if (auto v = token("CAL-ADDRESS")) return {{*v}};
+        if (auto v = token("DATE")) return {{*v}};
+        if (auto v = token("DATE-TIME")) return {{*v}};
+        if (auto v = token("DURATION")) return {{*v}};
+        if (auto v = token("FLOAT")) return {{*v}};
+        if (auto v = token("INTEGER")) return {{*v}};
+        if (auto v = token("PERIOD")) return {{*v}};
+        if (auto v = token("RECUR")) return {{*v}};
+        if (auto v = token("TEXT")) return {{*v}};
+        if (auto v = token("TIME")) return {{*v}};
+        if (auto v = token("URI")) return {{*v}};
+        if (auto v = token("UTC-OFFSET")) return {{*v}};
+        if (auto v = x_name()) return {{*v}};
+        if (auto v = iana_token()) return {{*v}};
         return nullopt;
 }
 
 //       valuetypeparam = "VALUE" "=" valuetype
-optional<ValueTypeParam> read_valuetypeparam(istream &is) {
+optional<ValueTypeParam> IcalParser::valuetypeparam() {
         CALLSTACK;
         save_input_pos ptran(is);
         ValueTypeParam ret;
 
-        if (!read_token(is, "VALUE")) return nullopt;
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("VALUE")) return nullopt;
+        if (!token("=")) return nullopt;
 
-        if (auto v = read_valuetype(is)) ret.value = *v;
+        if (auto v = valuetype()) ret.value = *v;
         else return nullopt;
 
         ptran.commit();
@@ -4951,20 +5222,20 @@ optional<ValueTypeParam> read_valuetypeparam(istream &is) {
 
 //     iana-param  = iana-token "=" param-value *("," param-value)
 //     ; Some other IANA-registered iCalendar parameter.
-optional<IanaParam> read_iana_param(istream &is) {
+optional<IanaParam> IcalParser::iana_param() {
         CALLSTACK;
         save_input_pos ptran(is);
         IanaParam ret;
 
-        if (auto v = read_iana_token(is)) ret.token = *v;
+        if (auto v = iana_token()) ret.token = *v;
         else return nullopt;
 
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("=")) return nullopt;
 
         do {
-                if (auto v = read_param_value(is)) ret.values.push_back(*v);
+                if (auto v = param_value()) ret.values.push_back(*v);
                 else return nullopt;
-        } while (read_token(is, ","));
+        } while (token(","));
 
         ptran.commit();
         return ret;
@@ -4972,20 +5243,20 @@ optional<IanaParam> read_iana_param(istream &is) {
 
 //     x-param     = x-name "=" param-value *("," param-value)
 //     ; A non-standard, experimental parameter.
-optional<XParam> read_x_param(istream &is) {
+optional<XParam> IcalParser::x_param() {
         CALLSTACK;
         save_input_pos ptran(is);
         XParam ret;
 
-        if (auto v = read_x_name(is)) ret.name = *v;
+        if (auto v = x_name()) ret.name = *v;
         else return nullopt;
 
-        if (!read_token(is, "=")) return nullopt;
+        if (!token("=")) return nullopt;
 
         do {
-                if (auto v = read_param_value(is)) ret.values.push_back(*v);
+                if (auto v = param_value()) ret.values.push_back(*v);
                 else return nullopt; // error
-        } while (read_token(is, ","));
+        } while (token(","));
 
         ptran.commit();
         return ret;
@@ -5013,38 +5284,38 @@ optional<XParam> read_x_param(istream &is) {
 //                   / tzidparam         ; Reference to time zone object
 //                   / valuetypeparam    ; Property value data type
 //                   / other-param
-ICalParameter expect_icalparameter(istream &is) {
+ICalParameter IcalParser::expect_icalparameter() {
         CALLSTACK;
-        if (auto v = read_icalparameter(is))
+        if (auto v = icalparameter())
                 return *v;
         throw syntax_error(is.tellg());
 }
-optional<ICalParameter> read_icalparameter(istream &is) {
+optional<ICalParameter> IcalParser::icalparameter() {
         CALLSTACK;
         save_input_pos ptran(is);
         ICalParameter ret;
 
-        if (auto v = read_altrepparam(is)) ret = *v;
-        else if (auto v = read_cnparam(is)) ret = *v;
-        else if (auto v = read_cutypeparam(is)) ret = *v;
-        else if (auto v = read_delfromparam(is)) ret = *v;
-        else if (auto v = read_deltoparam(is)) ret = *v;
-        else if (auto v = read_dirparam(is)) ret = *v;
-        else if (auto v = read_encodingparam(is)) ret = *v;
-        else if (auto v = read_fmttypeparam(is)) ret = *v;
-        else if (auto v = read_fbtypeparam(is)) ret = *v;
-        else if (auto v = read_languageparam(is)) ret = *v;
-        else if (auto v = read_memberparam(is)) ret = *v;
-        else if (auto v = read_partstatparam(is)) ret = *v;
-        else if (auto v = read_rangeparam(is)) ret = *v;
-        else if (auto v = read_trigrelparam(is)) ret = *v;
-        else if (auto v = read_reltypeparam(is)) ret = *v;
-        else if (auto v = read_roleparam(is)) ret = *v;
-        else if (auto v = read_rsvpparam(is)) ret = *v;
-        else if (auto v = read_sentbyparam(is)) ret = *v;
-        else if (auto v = read_tzidparam(is)) ret = *v;
-        else if (auto v = read_valuetypeparam(is)) ret = *v;
-        else if (auto v = read_other_param(is)) ret = *v;
+        if (auto v = altrepparam()) ret = *v;
+        else if (auto v = cnparam()) ret = *v;
+        else if (auto v = cutypeparam()) ret = *v;
+        else if (auto v = delfromparam()) ret = *v;
+        else if (auto v = deltoparam()) ret = *v;
+        else if (auto v = dirparam()) ret = *v;
+        else if (auto v = encodingparam()) ret = *v;
+        else if (auto v = fmttypeparam()) ret = *v;
+        else if (auto v = fbtypeparam()) ret = *v;
+        else if (auto v = languageparam()) ret = *v;
+        else if (auto v = memberparam()) ret = *v;
+        else if (auto v = partstatparam()) ret = *v;
+        else if (auto v = rangeparam()) ret = *v;
+        else if (auto v = trigrelparam()) ret = *v;
+        else if (auto v = reltypeparam()) ret = *v;
+        else if (auto v = roleparam()) ret = *v;
+        else if (auto v = rsvpparam()) ret = *v;
+        else if (auto v = sentbyparam()) ret = *v;
+        else if (auto v = tzidparam()) ret = *v;
+        else if (auto v = valuetypeparam()) ret = *v;
+        else if (auto v = other_param()) ret = *v;
         else return nullopt;
 
         ptran.commit();

@@ -24,6 +24,16 @@ using std::nullopt;
 using std::tuple;
 using std::make_tuple;
 
+// parse result
+struct parse_error {
+        int line, col;
+        string msg;
+};
+struct no_match {
+};
+template <typename T>
+using result = xvariant<parse_error, no_match, T>;
+
 // mixins
 struct having_string_name { string name; };
 struct having_string_value { string value; };
