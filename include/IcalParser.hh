@@ -274,11 +274,13 @@ public:
         optional<JournalComp> journalc();
         bool fbprop();
         optional<FreeBusyComp> freebusyc();
-        bool tzid();
-        bool tzurl();
+        optional<TzIdPropParam> tzidpropparam();
+        optional<TzId> tzid();
+        optional<TzUrlParam> tzurlparam();
+        optional<TzUrl> tzurl();
         bool tzprop();
-        bool daylightc();
-        bool standardc();
+        optional<DaylightC> daylightc();
+        optional<StandardC> standardc();
         optional<TimezoneComp> timezonec();
         optional<IanaComp> iana_comp();
         optional<XComp> x_comp();
@@ -305,7 +307,7 @@ public:
         optional<RoleParam> roleparam();
         optional<RsvpParam> rsvpparam();
         optional<SentByParam> sentbyparam();
-        optional<string> tzidprefix();
+        optional<TzIdPrefix> tzidprefix();
         optional<TzIdParam> tzidparam();
         optional<ValueType> valuetype();
         optional<ValueTypeParam> valuetypeparam();

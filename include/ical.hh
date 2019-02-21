@@ -99,7 +99,12 @@ struct RelTypeParam : having_string_value {};
 struct RoleParam : having_string_value {};
 struct RsvpParam : having_string_value {};
 struct SentByParam : having_string_value {};
-struct TzIdParam : having_string_value {};
+
+struct TzIdPrefix : having_string_value {};
+struct TzIdParam : having_string_value {
+        optional<TzIdPrefix> prefix;
+        string paramtext;
+};
 
 struct ValueType : having_string_value {};
 struct ValueTypeParam : having_value<ValueType> {};
@@ -381,7 +386,29 @@ struct EventComp {
 struct TodoComp {};
 struct JournalComp {};
 struct FreeBusyComp {};
-struct TimezoneComp {};
+
+struct TzIdPropParam : having_other_params {};
+struct TzUrlParam : having_other_params {};
+struct TzId {
+        TzIdPropParam propParams;
+        TzIdPrefix prefix;
+        string text;
+};
+struct TzUrl {
+        TzUrlParam params;
+        Uri uri;
+};
+struct StandardC {};
+struct DaylightC {};
+struct TimezoneComp {
+        TzId tzId;
+        optional<LastMod> lastMod;
+        optional<TzUrl> tzUrl;
+        xvariant<StandardC, DaylightC> observance; // TODO: not sure if this
+                                                   // name is proper
+        vector<XProp> xProps;
+        vector<IanaProp> ianaProps;
+};
 struct IanaComp {};
 struct XComp {};
 using Component = xvariant<EventComp,

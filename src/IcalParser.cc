@@ -4482,14 +4482,76 @@ optional<FreeBusyComp> IcalParser::freebusyc() {
         //return true;
 }
 
-bool IcalParser::tzid() {
+//       tzidpropparam      = *(";" other-param)
+optional<TzIdPropParam> IcalParser::tzidpropparam() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        TzIdPropParam ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
+                else return nullopt; // error
+        }
+        ptran.commit();
+        return ret;
 }
 
-bool IcalParser::tzurl() {
+//       tzid       = "TZID" tzidpropparam ":" [tzidprefix] text CRLF
+optional<TzId> IcalParser::tzid() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        TzId ret;
+
+        if (!token("TZID")) return nullopt;
+
+        if (auto v = tzidpropparam()) ret.propParams = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = tzidprefix()) ret.prefix = *v;
+
+        if (auto v = text()) ret.text = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+//       tzurlparam = *(";" other-param)
+optional<TzUrlParam> IcalParser::tzurlparam() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzUrlParam ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
+                else return nullopt; // error
+        }
+        ptran.commit();
+        return ret;
+}
+
+//       tzurl      = "TZURL" tzurlparam ":" uri CRLF
+optional<TzUrl> IcalParser::tzurl() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzUrl ret;
+
+        if (!token("TZURL")) return nullopt;
+
+        if (auto v = tzurlparam()) ret.params = *v;
+        else return nullopt;
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = uri()) ret.uri = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt;
+
+        ptran.commit();
+        return ret;
 }
 
 //       tzprop     = *(
@@ -4518,7 +4580,7 @@ bool IcalParser::tzprop() {
 //       daylightc  = "BEGIN" ":" "DAYLIGHT" CRLF
 //                    tzprop
 //                    "END" ":" "DAYLIGHT" CRLF
-bool IcalParser::daylightc() {
+optional<DaylightC> IcalParser::daylightc() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4526,7 +4588,7 @@ bool IcalParser::daylightc() {
 //       standardc  = "BEGIN" ":" "STANDARD" CRLF
 //                    tzprop
 //                    "END" ":" "STANDARD" CRLF
-bool IcalParser::standardc() {
+optional<StandardC> IcalParser::standardc() {
         CALLSTACK;
         NOT_IMPLEMENTED;
 }
@@ -4559,29 +4621,27 @@ bool IcalParser::standardc() {
 optional<TimezoneComp> IcalParser::timezonec() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success_pro =
-                key_value("BEGIN", "VTIMEZONE") &&
-                todoprop();
-        if (!success_pro)
+        TimezoneComp ret;
+
+        if (!key_value("BEGIN", "VTIMEZONE"))
                 return nullopt;
 
-        while(tzid() ||
-              last_mod() ||
-              tzurl() ||
-              standardc() ||
-              daylightc() ||
-              x_prop() ||
-              iana_prop()) {
+        while (true) {
+                if (auto v = tzid()) ret.tzId = *v;
+                else if (auto v = last_mod()) ret.lastMod = *v;
+                else if (auto v = tzurl()) ret.tzUrl = *v;
+                else if (auto v = standardc()) ret.observance = *v;
+                else if (auto v = daylightc()) ret.observance = *v;
+                else if (auto v = x_prop()) ret.xProps.push_back(*v);
+                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
+                else break;
         }
 
-        const auto success_epi =
-                key_value("END", "VTIMEZONE") ;
-        if (!success_epi)
+        if (!key_value("END", "VTIMEZONE"))
                 return nullopt;
 
         ptran.commit();
-        NOT_IMPLEMENTED;
-        //return true;
+        return ret;
 }
 
 //       iana-comp  = "BEGIN" ":" iana-token CRLF
@@ -5137,9 +5197,16 @@ optional<SentByParam> IcalParser::sentbyparam() {
 }
 
 //       tzidprefix = "/"
-optional<string> IcalParser::tzidprefix() {
+optional<TzIdPrefix> IcalParser::tzidprefix() {
         CALLSTACK;
-        return token("/");
+        save_input_pos ptran(is);
+        TzIdPrefix ret;
+
+        if (auto v = token("/")) ret.value = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
 }
 
 //       tzidparam  = "TZID" "=" [tzidprefix] paramtext
@@ -5152,11 +5219,11 @@ optional<TzIdParam> IcalParser::tzidparam() {
         if (!token("=")) return nullopt;
 
         if (auto v = tzidprefix()) {
-                ret.value += *v;
+                ret.prefix = *v;
         }
 
         if (auto v = paramtext()) {
-                ret.value += *v;
+                ret.paramtext = *v;
         } else {
                 return nullopt;
         }
