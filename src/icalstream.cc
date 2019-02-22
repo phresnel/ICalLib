@@ -261,6 +261,18 @@ std::ostream& operator<<(std::ostream& os, Time const &v) {
         return os << v.hour << ":" << v.minute << ":" << v.second;
 }
 
+std::ostream& operator<<(std::ostream& os, TimeHour const &v) {
+        return os << v.value;
+}
+
+std::ostream& operator<<(std::ostream& os, TimeMinute const &v) {
+        return os << v.value;
+}
+
+std::ostream& operator<<(std::ostream& os, TimeSecond const &v) {
+        return os << v.value;
+}
+
 std::ostream& operator<<(std::ostream& os, DateTime const &v) {
         return os << v.date << "T" << v.time;
 }

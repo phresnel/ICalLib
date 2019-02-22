@@ -1957,22 +1957,37 @@ optional<Date> IcalParser::date() {
 }
 
 //       time-hour    = 2DIGIT        ;00-23
-optional<string> IcalParser::time_hour() {
+optional<TimeHour> IcalParser::time_hour() {
         CALLSTACK;
-        return digits(2);
+        save_input_pos ptran(is);
+        TimeHour ret;
+        if (auto v = digits(2)) ret.value = *v;
+        else return nullopt;
+        ptran.commit();
+        return ret;
 }
 
 //       time-minute  = 2DIGIT        ;00-59
-optional<string> IcalParser::time_minute() {
+optional<TimeMinute> IcalParser::time_minute() {
         CALLSTACK;
-        return digits(2);
+        save_input_pos ptran(is);
+        TimeMinute ret;
+        if (auto v = digits(2)) ret.value = *v;
+        else return nullopt;
+        ptran.commit();
+        return ret;
 }
 
 //       time-second  = 2DIGIT        ;00-60
 //       ;The "60" value is used to account for positive "leap" seconds.
-optional<string> IcalParser::time_second() {
+optional<TimeSecond> IcalParser::time_second() {
         CALLSTACK;
-        return digits(2);
+        save_input_pos ptran(is);
+        TimeSecond ret;
+        if (auto v = digits(2)) ret.value = *v;
+        else return nullopt;
+        ptran.commit();
+        return ret;
 }
 
 //       time-utc     = "Z"
@@ -4554,6 +4569,165 @@ optional<TzUrl> IcalParser::tzurl() {
         return ret;
 }
 
+//       frmparam   = *(";" other-param)
+optional<FrmParam> IcalParser::frmparam() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        FrmParam ret;
+
+        while (token(";")) {
+                if (auto v = other_param()) ret.otherParams.push_back(*v);
+                else return nullopt; // error
+        }
+
+        ptran.commit();
+        return ret;
+}
+
+//       toparam    = *(";" other-param)
+optional<ToParam> IcalParser::toparam() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        ToParam ret;
+
+        while (token(";")) {
+                if (auto v = other_param()) ret.otherParams.push_back(*v);
+                else return nullopt; // error
+        }
+
+        ptran.commit();
+        return ret;
+}
+
+//       time-numzone = ("+" / "-") time-hour time-minute [time-second]
+optional<TimeNumZone> IcalParser::time_numzone() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TimeNumZone ret;
+
+        if (token("+")) ret.sign = +1;
+        else if (token("-")) ret.sign = -1;
+        else return nullopt;
+
+        if (auto v = time_hour()) ret.hour = *v;
+        else return nullopt; // error
+
+        if (auto v = time_minute()) ret.minute = *v;
+        else return nullopt; // error
+
+        if (auto v = time_second()) ret.second = *v;
+
+        ptran.commit();
+        return ret;
+}
+
+//       utc-offset = time-numzone
+optional<UtcOffset> IcalParser::utc_offset() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        UtcOffset ret;
+
+        if (auto v = time_numzone()) ret.numZone = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+//       tzoffsetto = "TZOFFSETTO" toparam ":" utc-offset CRLF
+optional<TzOffsetTo> IcalParser::tzoffsetto() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzOffsetTo ret;
+
+        if (!token("TZOFFSETTO")) return nullopt;
+
+        if (auto v = toparam()) ret.param = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = utc_offset()) ret.utcOffset = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt; // error
+
+        ptran.commit();
+        return ret;
+}
+
+//       tzoffsetfrom       = "TZOFFSETFROM" frmparam ":" utc-offset CRLF
+optional<TzOffsetFrom> IcalParser::tzoffsetfrom() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzOffsetFrom ret;
+
+        if (!token("TZOFFSETFROM")) return nullopt;
+
+        if (auto v = frmparam()) ret.param = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = utc_offset()) ret.utcOffset = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt; // error
+
+        ptran.commit();
+        return ret;
+}
+
+//       tznparam   = *(
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; but MUST NOT occur more than once.
+//                  ;
+//                  (";" languageparam) /
+//                  ;
+//                  ; The following is OPTIONAL,
+//                  ; and MAY occur more than once.
+//                  ;
+//                  (";" other-param)
+//                  ;
+//                  )
+optional<TzNParam> IcalParser::tznparam() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzNParam ret;
+
+        while (true) {
+                if (auto v = languageparam()) ret.languageParam = *v;
+                else if (auto v = other_param()) ret.otherParams.push_back(*v);
+                else break;
+        }
+
+        ptran.commit();
+        return ret;
+}
+
+//       tzname     = "TZNAME" tznparam ":" text CRLF
+optional<TzName> IcalParser::tzname() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        TzName ret;
+
+        if (!token("TZNAME")) return nullopt;
+
+        if (auto v = tznparam()) ret.param = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = text()) ret.text = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt; // error
+
+        ptran.commit();
+        return ret;
+}
+
 //       tzprop     = *(
 //                    ;
 //                    ; The following are REQUIRED,
@@ -4572,9 +4746,25 @@ optional<TzUrl> IcalParser::tzurl() {
 //                    comment / rdate / tzname / x-prop / iana-prop
 //                    ;
 //                    )
-bool IcalParser::tzprop() {
+optional<TzProp> IcalParser::tzprop() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        TzProp ret;
+
+        while (true) {
+                if (auto v = dtstart()) ret.dtStart = *v;
+                else if (auto v = tzoffsetto()) ret.offsetTo = *v;
+                else if (auto v = tzoffsetfrom()) ret.offsetFrom = *v;
+                else if (auto v = rrule()) ret.rRule = *v;
+                else if (auto v = comment()) ret.comments.push_back(*v);
+                else if (auto v = rdate()) ret.rDates.push_back(*v);
+                else if (auto v = tzname()) ret.tzNames.push_back(*v);
+                else if (auto v = x_prop()) ret.xProps.push_back(*v);
+                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
+        }
+
+        ptran.commit();
+        return ret;
 }
 
 //       daylightc  = "BEGIN" ":" "DAYLIGHT" CRLF
@@ -4590,7 +4780,20 @@ optional<DaylightC> IcalParser::daylightc() {
 //                    "END" ":" "STANDARD" CRLF
 optional<StandardC> IcalParser::standardc() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        StandardC ret;
+
+        if (!key_value("BEGIN", "STANDARD")) return nullopt;
+        if (!newline()) return nullopt; // error
+
+        if (auto v = tzprop()) ret.tzProp = *v;
+        else return nullopt; // error
+
+        if (!key_value("END", "STANDARD")) return nullopt; // error
+        if (!newline()) return nullopt; // error
+
+        ptran.commit();
+        return ret;
 }
 
 //       timezonec  = "BEGIN" ":" "VTIMEZONE" CRLF

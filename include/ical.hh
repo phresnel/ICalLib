@@ -144,10 +144,14 @@ struct Date {
         string day;
 };
 
+struct TimeHour : having_string_value {};
+struct TimeMinute : having_string_value {};
+struct TimeSecond : having_string_value {};
+
 struct Time {
-        string hour;
-        string minute;
-        string second;
+        TimeHour hour;
+        TimeMinute minute;
+        TimeSecond second;
         optional<string> utc;
 };
 
@@ -398,8 +402,54 @@ struct TzUrl {
         TzUrlParam params;
         Uri uri;
 };
-struct StandardC {};
-struct DaylightC {};
+struct TzNParam {
+        LanguageParam languageParam;
+        vector<OtherParam> otherParams;
+};
+struct TzName {
+        TzNParam param;
+        string text;
+};
+struct FrmParam {
+        vector<OtherParam> otherParams;
+};
+struct ToParam {
+        vector<OtherParam> otherParams;
+};
+struct TimeNumZone {
+        int sign;
+        TimeHour hour;
+        TimeMinute minute;
+        optional<TimeSecond> second;
+};
+struct UtcOffset {
+        TimeNumZone numZone;
+};
+struct TzOffsetTo {
+        ToParam param;
+        UtcOffset utcOffset;
+};
+struct TzOffsetFrom {
+        FrmParam param;
+        UtcOffset utcOffset;
+};
+struct TzProp {
+        DtStart dtStart;
+        TzOffsetTo offsetTo;
+        TzOffsetFrom offsetFrom;
+        optional<RRule> rRule;
+        vector<Comment> comments;
+        vector<RDate> rDates;
+        vector<TzName> tzNames;
+        vector<XProp> xProps;
+        vector<IanaProp> ianaProps;
+};
+struct StandardC {
+        TzProp tzProp;
+};
+struct DaylightC {
+        TzProp tzProp;
+};
 struct TimezoneComp {
         TzId tzId;
         optional<LastMod> lastMod;

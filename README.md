@@ -10,3 +10,4 @@ Parser and writer for ICalendar files.
 - [ ] parse functions should be more brutal when it's clear that something's not a syntax error but a format error. I.e., when there "BEGIN:XXX", with an unknown "XXX", it should be a file format error, not just a syntax error
 - [ ] set default params according to RFC
 - [ ] refine structures "but if one occurs, so MUST the other."
+- [ ] strings should be made case insensitive
