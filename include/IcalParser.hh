@@ -60,8 +60,8 @@ public:
 
 
         // -- Methods. ---------------------------------------------------------
-        tuple<string, string> expect_key_value(string const &k, string const &v);
-        optional<tuple<string, string>> key_value(string const &k, string const &v);
+        tuple<string, string> expect_key_value_newline(string const &k, string const &v);
+        optional<tuple<string, string>> key_value_newline(string const &k, string const &v);
 
         ContentLine expect_contentline();
         optional<ContentLine> contentline();
@@ -202,36 +202,38 @@ public:
         bool ridval();
         bool ridparam_single();
         bool ridparam();
-        bool setposday();
-        bool bysplist();
-        bool monthnum();
-        bool bymolist();
-        bool weeknum();
-        bool bywknolist();
-        bool ordyrday();
-        bool yeardaynum();
-        bool byyrdaylist();
-        bool ordmoday();
-        bool monthdaynum();
-        bool bymodaylist();
-        bool weekday();
-        bool ordwk();
+        optional<SetPosDay> setposday();
+        optional<BySpList> bysplist();
+        optional<MonthNum> monthnum();
+        optional<ByMoList> bymolist();
+        optional<Weeknum> weeknum();
+        optional<ByWkNoList> bywknolist();
+        optional<OrdYrDay> ordyrday();
+        optional<YearDayNum> yeardaynum();
+        optional<ByYrDayList> byyrdaylist();
+        optional<OrdMoDay> ordmoday();
+        optional<MonthDayNum> monthdaynum();
+        optional<ByMoDayList> bymodaylist();
+        optional<WeekDay> weekday();
+        optional<OrdWk> ordwk();
         bool minus();
         bool plus();
-        bool weekdaynum();
-        bool bywdaylist();
-        bool hour();
-        bool byhrlist();
-        bool minutes();
-        bool byminlist();
-        bool seconds();
-        bool byseclist();
-        bool enddate();
-        bool freq();
-        bool recur_rule_part();
-        bool recur();
+        optional<WeekDayNum> weekdaynum();
+        optional<ByWDayList> bywdaylist();
+
+        optional<Hour> hour();
+        optional<Minutes> minutes();
+        optional<Seconds> seconds();
+
+        optional<ByHrList> byhrlist();
+        optional<ByMinList> byminlist();
+        optional<BySecList> byseclist();
+        optional<EndDate> enddate();
+        optional<Freq> freq();
+
+        optional<Recur> recur();
         optional<RecurId> recurid();
-        bool rrulparam();
+        optional<RRulParam> rrulparam();
         optional<RRule> rrule();
         optional<DtEndVal> dtendval();
         optional<DtEndParams> dtendparam();

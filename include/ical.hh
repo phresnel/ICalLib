@@ -20,6 +20,11 @@ using std::vector;
 using std::optional;
 using std::nullopt;
 
+// TODO: provide types which express requiredness:
+//         mandatory<>
+//         optional<>
+//         vector<>
+
 // tuple
 using std::tuple;
 using std::make_tuple;
@@ -237,8 +242,92 @@ struct Summary : having_string_value {
 };
 struct Transp {};
 struct Url {};
+
 struct RecurId {};
-struct RRule {};
+
+enum Freq {
+        Secondly,
+        Minutely,
+        Hourly,
+        Daily,
+        Weekly,
+        Monthly,
+        Yearly
+};
+using EndDate = xvariant<Date, DateTime>;
+
+using OrdMoDay = string;
+using OrdYrDay = string;
+using OrdWk = string;
+struct SignedOrdWk {
+        int sign;
+        OrdWk ordWk;
+};
+using MonthNum = string;
+
+using Seconds = string;
+using Minutes = string;
+using Hour = string;
+
+enum WeekDay {
+        Sunday,
+        Monday,
+        Tuesday,
+        Wednesday,
+        Thursday,
+        Friday,
+        Saturday
+};
+struct WeekDayNum {
+        optional<SignedOrdWk> week;
+        WeekDay weekDay;
+};
+struct MonthDayNum {
+        int sign;
+        OrdMoDay day;
+};
+struct YearDayNum {
+        int sign;
+        OrdMoDay day;
+};
+
+struct Weeknum {};
+
+using SetPosDay = YearDayNum;
+
+using BySecList = vector<Seconds>;
+using ByMinList = vector<Minutes>;
+using ByHrList = vector<Hour>;
+using ByWDayList = vector<WeekDayNum>;
+using ByMoDayList = vector<MonthDayNum>;
+using ByYrDayList = vector<YearDayNum>;
+using ByWkNoList = vector<Weeknum>;
+using ByMoList = vector<MonthNum>;
+using BySpList = vector<SetPosDay>;
+
+struct Recur {
+        Freq freq;
+        xvariant<EndDate, string> duration;
+
+        optional<string> interval;
+        optional<BySecList> bySecond;
+        optional<ByMinList> byMinute;
+        optional<ByHrList> byHour;
+        optional<ByWDayList> byDay;
+        optional<ByMoDayList> byMonthDay;
+        optional<ByYrDayList> byYearDay;
+        optional<ByWkNoList> byweekNo;
+        optional<ByMoList> byMonth;
+        optional<BySpList> bySetpos;
+        optional<WeekDay> wkst;
+};
+struct RRulParam {
+        vector<OtherParam> otherParams;
+};
+struct RRule {
+        RRulParam param;
+        Recur recur;
+};
 struct Duration {};
 struct Attach {};
 struct Attendee {};

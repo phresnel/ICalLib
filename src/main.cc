@@ -29,7 +29,8 @@ void read_file(std::string const &filename) {
 }
 
 int main() {
-        read_file("dev-assets/f1calendar.com/2019_full.ics");
+        //read_file("dev-assets/f1calendar.com/2019_full.ics");
+        read_file("C:/Users/machs/Desktop/mach.seb@gmail.com.ical/G/T/J_ Geburtstage_h3b3vuo67ftpsf541di68ghc6k@group.calendar.google.com.ics");
         //read_file("dev-assets/mini1.ics");
         return 0;
 }

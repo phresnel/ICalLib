@@ -277,7 +277,7 @@ optional<string> IcalParser::alnum() {
 }
 
 
-tuple<string, string> IcalParser::expect_key_value(
+tuple<string, string> IcalParser::expect_key_value_newline(
         string const &k,
         string const &v
 ) {
@@ -295,13 +295,13 @@ tuple<string, string> IcalParser::expect_key_value(
         return {k, v};
 }
 
-optional<tuple<string, string>> IcalParser::key_value(
+optional<tuple<string, string>> IcalParser::key_value_newline(
         string const &k,
         string const &v
 ) {
         CALLSTACK;
         try {
-                return expect_key_value(k, v);
+                return expect_key_value_newline(k, v);
         } catch (syntax_error &) {
                 return nullopt;
         }
@@ -900,9 +900,9 @@ Calendar IcalParser::expect_ical() {
         CALLSTACK;
         save_input_pos ptran(is);
         Calendar ret;
-        expect_key_value("BEGIN", "VCALENDAR");
+        expect_key_value_newline("BEGIN", "VCALENDAR");
         ret = expect_icalbody();
-        expect_key_value("END", "VCALENDAR");
+        expect_key_value_newline("END", "VCALENDAR");
         ptran.commit();
         // TODO: The grammar says that there can be more than 1 icalobject.
         return ret;
@@ -1894,7 +1894,7 @@ optional<Alarm> IcalParser::alarmc() {
         save_input_pos ptran(is);
         Alarm ret;
 
-        if (!key_value("BEGIN", "VALARM")) return nullopt;
+        if (!key_value_newline("BEGIN", "VALARM")) return nullopt;
 
         // Compared to the grammar, we invert the checking-order
         // because the required fields overlap, so we check for most
@@ -1905,7 +1905,7 @@ optional<Alarm> IcalParser::alarmc() {
         else if (auto v = audioprop()) ret = *v;
         else return nullopt; // TODO: Error, not empty
 
-        if (!key_value("END", "VALARM"))
+        if (!key_value_newline("END", "VALARM"))
                 return nullopt; // TODO: Error, not empty
 
         ptran.commit();
@@ -3058,198 +3058,219 @@ bool IcalParser::ridparam() {
 }
 
 //       setposday   = yeardaynum
-bool IcalParser::setposday() {
+optional<SetPosDay> IcalParser::setposday() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        SetPosDay ret;
+
+        if (auto v = yeardaynum()) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       bysplist    = ( setposday *("," setposday) )
-bool IcalParser::bysplist() {
+optional<BySpList> IcalParser::bysplist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        BySpList ret;
+
+        do {
+                if (auto v = setposday()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       monthnum    = 1*2DIGIT       ;1 to 12
-bool IcalParser::monthnum() {
+optional<MonthNum> IcalParser::monthnum() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        MonthNum ret;
+
+        if (auto v = digits(1,2)) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       bymolist    = ( monthnum *("," monthnum) )
-bool IcalParser::bymolist() {
+optional<ByMoList> IcalParser::bymolist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        ByMoList ret;
+
+        do {
+                if (auto v = monthnum()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       weeknum     = [plus / minus] ordwk
-bool IcalParser::weeknum() {
+optional<Weeknum> IcalParser::weeknum() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
 }
 
 //       bywknolist  = ( weeknum *("," weeknum) )
-bool IcalParser::bywknolist() {
+optional<ByWkNoList> IcalParser::bywknolist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        ByWkNoList ret;
+
+        do {
+                if (auto v = weeknum()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       ordyrday    = 1*3DIGIT      ;1 to 366
-bool IcalParser::ordyrday() {
+optional<OrdYrDay> IcalParser::ordyrday() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        OrdYrDay ret;
+
+        if (auto v = digits(1,3)) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       yeardaynum  = [plus / minus] ordyrday
-bool IcalParser::yeardaynum() {
+optional<YearDayNum> IcalParser::yeardaynum() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        YearDayNum ret;
+
+        if (auto v = plus()) ret.sign = +1;
+        else if (auto v = minus()) ret.sign = -1;
+        else ret.sign = +1;
+
+        if (auto v = ordyrday()) ret.day = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       byyrdaylist = ( yeardaynum *("," yeardaynum) )
-bool IcalParser::byyrdaylist() {
+optional<ByYrDayList> IcalParser::byyrdaylist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        ByYrDayList ret;
+
+        do {
+                if (auto v = yeardaynum()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       ordmoday    = 1*2DIGIT       ;1 to 31
-bool IcalParser::ordmoday() {
+optional<OrdMoDay> IcalParser::ordmoday() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        OrdMoDay ret;
+
+        if (auto v = digits(1,2)) ret = *v;
+        return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       monthdaynum = [plus / minus] ordmoday
-bool IcalParser::monthdaynum() {
+optional<MonthDayNum> IcalParser::monthdaynum() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        MonthDayNum ret;
+
+        if (auto v = plus()) ret.sign = +1;
+        else if (auto v = minus()) ret.sign = -1;
+        else ret.sign = +1;
+
+        if (auto v = ordmoday()) ret.day = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       bymodaylist = ( monthdaynum *("," monthdaynum) )
-bool IcalParser::bymodaylist() {
+optional<ByMoDayList> IcalParser::bymodaylist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        ByMoDayList ret;
+
+        do {
+                if (auto v = monthdaynum()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       weekday     = "SU" / "MO" / "TU" / "WE" / "TH" / "FR" / "SA"
 //       ;Corresponding to SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY,
 //       ;FRIDAY, and SATURDAY days of the week.
-bool IcalParser::weekday() {
+optional<WeekDay> IcalParser::weekday() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        WeekDay ret;
+
+        if (token("SU")) ret = WeekDay::Sunday;
+        else if (token("MO")) ret = WeekDay::Monday;
+        else if (token("TU")) ret = WeekDay::Tuesday;
+        else if (token("WE")) ret = WeekDay::Wednesday;
+        else if (token("TH")) ret = WeekDay::Thursday;
+        else if (token("FR")) ret = WeekDay::Friday;
+        else if (token("SA")) ret = WeekDay::Saturday;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       ordwk       = 1*2DIGIT       ;1 to 53
-bool IcalParser::ordwk() {
+optional<OrdWk> IcalParser::ordwk() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        OrdWk ret;
+        if (auto v = digits(1,2)) ret = *v;
+        else return nullopt;
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       minus       = "-"
 bool IcalParser::minus() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        if (!token("-")) return false;
         ptran.commit();
         return true;
 }
@@ -3257,145 +3278,179 @@ bool IcalParser::minus() {
 //       plus        = "+"
 bool IcalParser::plus() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        if (!token("+")) return false;
         ptran.commit();
         return true;
 }
 
 //       weekdaynum  = [[plus / minus] ordwk] weekday
-bool IcalParser::weekdaynum() {
+optional<WeekDayNum> IcalParser::weekdaynum() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        WeekDayNum ret;
+
+        const int sign = plus() ? +1 : minus() ? -1 : 0;
+        if (sign) {
+                if (auto v = ordwk()) {
+                        ret.week = SignedOrdWk();
+                        ret.week->sign = sign;
+                        ret.week->ordWk = *v;
+                } else {
+                        return nullopt; // error
+                }
+        } else if (auto v = ordwk()) {
+                ret.week = SignedOrdWk();
+                ret.week->sign = +1;
+                ret.week->ordWk = *v;
+        }
+
+        if (auto v = weekday()) ret.weekDay = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       bywdaylist  = ( weekdaynum *("," weekdaynum) )
-bool IcalParser::bywdaylist() {
+optional<ByWDayList> IcalParser::bywdaylist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
+        ByWDayList ret;
 
-//       hour        = 1*2DIGIT       ;0 to 23
-bool IcalParser::hour() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
+        do {
+                if (auto v = weekdaynum()) ret.push_back(*v);
+                else break;
+        } while (token(","));
 
-//       byhrlist    = ( hour *("," hour) )
-bool IcalParser::byhrlist() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
+        if (ret.empty()) return nullopt;
 
-//       minutes     = 1*2DIGIT       ;0 to 59
-bool IcalParser::minutes() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
         ptran.commit();
-        return true;
-}
-
-//       byminlist   = ( minutes *("," minutes) )
-bool IcalParser::byminlist() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
+        return ret;
 }
 
 //       seconds     = 1*2DIGIT       ;0 to 60
-bool IcalParser::seconds() {
+optional<Seconds> IcalParser::seconds() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        Seconds ret;
+
+        if (auto v = digits(1,2)) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
+}
+
+//       hour        = 1*2DIGIT       ;0 to 23
+optional<Hour> IcalParser::hour() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        Hour ret;
+
+        if (auto v = digits(1,2)) ret = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+//       minutes     = 1*2DIGIT       ;0 to 59
+optional<Minutes> IcalParser::minutes() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        Hour ret;
+
+        if (auto v = digits(1,2)) ret = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+//       byhrlist    = ( hour *("," hour) )
+optional<ByHrList> IcalParser::byhrlist() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        ByHrList ret;
+
+        do {
+                if (auto v = hour()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
+        ptran.commit();
+        return ret;
+}
+
+//       byminlist   = ( minutes *("," minutes) )
+optional<ByMinList> IcalParser::byminlist() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        ByMinList ret;
+
+        do {
+                if (auto v = minutes()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
+        ptran.commit();
+        return ret;
 }
 
 //       byseclist   = ( seconds *("," seconds) )
-bool IcalParser::byseclist() {
+optional<BySecList> IcalParser::byseclist() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        BySecList ret;
+
+        do {
+                if (auto v = seconds()) ret.push_back(*v);
+                else break;
+        } while (token(","));
+
+        if (ret.empty()) return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       enddate     = date / date-time
-bool IcalParser::enddate() {
+optional<EndDate> IcalParser::enddate() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        EndDate ret;
+
+        if (auto v = date()) ret = *v;
+        else if (auto v = date_time()) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       freq        = "SECONDLY" / "MINUTELY" / "HOURLY" / "DAILY"
 //                   / "WEEKLY" / "MONTHLY" / "YEARLY"
-bool IcalParser::freq() {
+optional<Freq> IcalParser::freq() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        Freq ret;
+
+        if (token("SECONDLY")) ret = Freq::Secondly;
+        else if (token("MINUTELY")) ret = Freq::Minutely;
+        else if (token("HOURLY")) ret = Freq::Hourly;
+        else if (token("DAILY")) ret = Freq::Daily;
+        else if (token("WEEKLY")) ret = Freq::Weekly;
+        else if (token("MONTHLY")) ret = Freq::Monthly;
+        else if (token("YEARLY")) ret = Freq::Yearly;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       recur-rule-part = ( "FREQ" "=" freq )
@@ -3412,18 +3467,7 @@ bool IcalParser::freq() {
 //                       / ( "BYMONTH" "=" bymolist )
 //                       / ( "BYSETPOS" "=" bysplist )
 //                       / ( "WKST" "=" weekday )
-bool IcalParser::recur_rule_part() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
-        ptran.commit();
-        return true;
-}
-
+//
 //       recur           = recur-rule-part *( ";" recur-rule-part )
 //                       ;
 //                       ; The rule parts are not ordered in any
@@ -3437,16 +3481,75 @@ bool IcalParser::recur_rule_part() {
 //                       ;
 //                       ; The other rule parts are OPTIONAL,
 //                       ; but MUST NOT occur more than once.
-bool IcalParser::recur() {
+optional<Recur> IcalParser::recur() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        const auto success =
-                false;
-        if (!success)
-                return false;
+        Recur ret;
+
+        do {
+                if (token("FREQ")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = freq()) ret.freq = *v;
+                        else return nullopt; // error
+                } else if (token("UNTIL")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = enddate()) ret.duration = *v;
+                        else return nullopt; // error
+                } else if (token("COUNT")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = digits(1,-1)) ret.duration = *v;
+                        else return nullopt; // error
+                } else if (token("INTERVAL")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = digits(1,-1)) ret.interval = *v;
+                        else return nullopt; // error
+                } else if (token("BYSECOND")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = byseclist()) ret.bySecond = *v;
+                        else return nullopt; // error
+                } else if (token("BYMINUTE")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = byminlist()) ret.byMinute = *v;
+                        else return nullopt; // error
+                } else if (token("BYHOUR")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = byhrlist()) ret.byHour = *v;
+                        else return nullopt; // error
+                } else if (token("BYDAY")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = bywdaylist()) ret.byDay = *v;
+                        else return nullopt; // error
+                } else if (token("BYMONTHDAY")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = bymodaylist()) ret.byMonthDay = *v;
+                        else return nullopt; // error
+                } else if (token("BYYEARDAY")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = byyrdaylist()) ret.byYearDay = *v;
+                        else return nullopt; // error
+                } else if (token("BYWEEKNO")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = bywknolist()) ret.byweekNo = *v;
+                        else return nullopt; // error
+                } else if (token("BYMONTH")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = bymolist()) ret.byMonth = *v;
+                        else return nullopt; // error
+                } else if (token("BYSETPOS")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = bysplist()) ret.bySetpos = *v;
+                        else return nullopt; // error
+                } else if (token("WKST")) {
+                        if (!token("=")) return nullopt; // error
+                        if (auto v = weekday()) ret.wkst = *v;
+                        else return nullopt; // error
+                } else {
+                        return nullopt; // error
+                }
+        } while (token(";"));
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       recurid    = "RECURRENCE-ID" ridparam ":" ridval CRLF
@@ -3465,28 +3568,38 @@ optional<RecurId> IcalParser::recurid() {
         NOT_IMPLEMENTED;
 }
 //       rrulparam  = *(";" other-param)
-bool IcalParser::rrulparam() {
+optional<RRulParam> IcalParser::rrulparam() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        RRulParam ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.otherParams.push_back(*v);
+                else return nullopt; // error
+        }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
 optional<RRule> IcalParser::rrule() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                token("RRULE") &&
-                rrulparam() &&
-                token(":") &&
-                recur() &&
-                newline();
-        if (!success)
-                return nullopt;
+        RRule ret;
+
+        if (!token("RRULE")) return nullopt;
+
+        if (auto v = rrulparam()) ret.param = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = recur()) ret.recur = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt; // error
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 
 //       dtendval   = date-time / date
@@ -4323,7 +4436,7 @@ optional<EventComp> IcalParser::eventc() {
         save_input_pos ptran(is);
         EventComp ret;
 
-        if (!key_value("BEGIN", "VEVENT")) return nullopt;
+        if (!key_value_newline("BEGIN", "VEVENT")) return nullopt;
 
         if (auto v = eventprop()) ret.properties = *v;
         else return nullopt;
@@ -4332,7 +4445,7 @@ optional<EventComp> IcalParser::eventc() {
                 ret.alarms.push_back(*v);
         }
 
-        if (!key_value("END", "VEVENT")) return nullopt;
+        if (!key_value_newline("END", "VEVENT")) return nullopt;
 
         ptran.commit();
         return ret;
@@ -4388,7 +4501,7 @@ optional<TodoComp> IcalParser::todoc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success_pro =
-                key_value("BEGIN", "VTODO") &&
+                key_value_newline("BEGIN", "VTODO") &&
                 todoprop();
         if (!success_pro)
                 return nullopt;
@@ -4397,7 +4510,7 @@ optional<TodoComp> IcalParser::todoc() {
         }
 
         const auto success_epi =
-                key_value("END", "VTODO") ;
+                key_value_newline("END", "VTODO") ;
         if (!success_epi)
                 return nullopt;
 
@@ -4445,9 +4558,9 @@ optional<JournalComp> IcalParser::journalc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                key_value("BEGIN", "VJOURNAL") &&
+                key_value_newline("BEGIN", "VJOURNAL") &&
                 jourprop() &&
-                key_value("END", "VJOURNAL") ;
+                        key_value_newline("END", "VJOURNAL") ;
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -4487,9 +4600,9 @@ optional<FreeBusyComp> IcalParser::freebusyc() {
         CALLSTACK;
         save_input_pos ptran(is);
         const auto success =
-                key_value("BEGIN", "VFREEBUSY") &&
+                key_value_newline("BEGIN", "VFREEBUSY") &&
                 fbprop() &&
-                key_value("END", "VFREEBUSY") ;
+                        key_value_newline("END", "VFREEBUSY") ;
         if (!success)
                 return nullopt;
         ptran.commit();
@@ -4761,6 +4874,7 @@ optional<TzProp> IcalParser::tzprop() {
                 else if (auto v = tzname()) ret.tzNames.push_back(*v);
                 else if (auto v = x_prop()) ret.xProps.push_back(*v);
                 else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
+                else break;
         }
 
         ptran.commit();
@@ -4775,14 +4889,12 @@ optional<DaylightC> IcalParser::daylightc() {
         save_input_pos ptran(is);
         DaylightC ret;
 
-        if (!key_value("BEGIN", "DAYLIGHT")) return nullopt;
-        if (!newline()) return nullopt; // error
+        if (!key_value_newline("BEGIN", "DAYLIGHT")) return nullopt;
 
         if (auto v = tzprop()) ret.tzProp = *v;
         return nullopt; // error
 
-        if (!key_value("END", "DAYLIGHT")) return nullopt; // error
-        if (!newline()) return nullopt; // error
+        if (!key_value_newline("END", "DAYLIGHT")) return nullopt; // error
 
         ptran.commit();
         return ret;
@@ -4796,14 +4908,12 @@ optional<StandardC> IcalParser::standardc() {
         save_input_pos ptran(is);
         StandardC ret;
 
-        if (!key_value("BEGIN", "STANDARD")) return nullopt;
-        if (!newline()) return nullopt; // error
+        if (!key_value_newline("BEGIN", "STANDARD")) return nullopt;
 
         if (auto v = tzprop()) ret.tzProp = *v;
         else return nullopt; // error
 
-        if (!key_value("END", "STANDARD")) return nullopt; // error
-        if (!newline()) return nullopt; // error
+        if (!key_value_newline("END", "STANDARD")) return nullopt; // error
 
         ptran.commit();
         return ret;
@@ -4839,8 +4949,7 @@ optional<TimezoneComp> IcalParser::timezonec() {
         save_input_pos ptran(is);
         TimezoneComp ret;
 
-        if (!key_value("BEGIN", "VTIMEZONE"))
-                return nullopt;
+        if (!key_value_newline("BEGIN", "VTIMEZONE")) return nullopt;
 
         while (true) {
                 if (auto v = tzid()) ret.tzId = *v;
@@ -4853,8 +4962,10 @@ optional<TimezoneComp> IcalParser::timezonec() {
                 else break;
         }
 
-        if (!key_value("END", "VTIMEZONE"))
-                return nullopt;
+        if (!key_value_newline("END", "VTIMEZONE")) {
+                dump_remainder_and_exit(is);
+                return nullopt; // error
+        }
 
         ptran.commit();
         return ret;
