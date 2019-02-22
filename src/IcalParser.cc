@@ -4772,7 +4772,20 @@ optional<TzProp> IcalParser::tzprop() {
 //                    "END" ":" "DAYLIGHT" CRLF
 optional<DaylightC> IcalParser::daylightc() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+        DaylightC ret;
+
+        if (!key_value("BEGIN", "DAYLIGHT")) return nullopt;
+        if (!newline()) return nullopt; // error
+
+        if (auto v = tzprop()) ret.tzProp = *v;
+        return nullopt; // error
+
+        if (!key_value("END", "DAYLIGHT")) return nullopt; // error
+        if (!newline()) return nullopt; // error
+
+        ptran.commit();
+        return ret;
 }
 
 //       standardc  = "BEGIN" ":" "STANDARD" CRLF
