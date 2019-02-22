@@ -4892,7 +4892,7 @@ optional<DaylightC> IcalParser::daylightc() {
         if (!key_value_newline("BEGIN", "DAYLIGHT")) return nullopt;
 
         if (auto v = tzprop()) ret.tzProp = *v;
-        return nullopt; // error
+        else return nullopt; // error
 
         if (!key_value_newline("END", "DAYLIGHT")) return nullopt; // error
 
@@ -4963,7 +4963,6 @@ optional<TimezoneComp> IcalParser::timezonec() {
         }
 
         if (!key_value_newline("END", "VTIMEZONE")) {
-                dump_remainder_and_exit(is);
                 return nullopt; // error
         }
 
