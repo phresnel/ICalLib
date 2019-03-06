@@ -2431,27 +2431,37 @@ optional<Class> IcalParser::class_() {
         return ret;
 }
 //       creaparam  = *(";" other-param)
-bool IcalParser::creaparam() {
+optional<CreaParam> IcalParser::creaparam() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        CreaParam ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
+                else return nullopt;
+        }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       created    = "CREATED" creaparam ":" date-time CRLF
 optional<Created> IcalParser::created() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                token("CREATED") &&
-                creaparam() &&
-                token(":") &&
-                date_time() &&
-                newline();
-        if (!success)
-                return nullopt;
+        Created ret;
+
+        if (!token("CREATED")) return nullopt;
+
+        if (auto v = creaparam()) ret.params = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt;
+
+        if (auto v = date_time()) ret.dateTime = *v;
+        else return nullopt; // error
+
+        if (!newline()) return nullopt; // error
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 //       descparam   = *(
 //                   ;

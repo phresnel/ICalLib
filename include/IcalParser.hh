@@ -164,7 +164,7 @@ public:
         optional<string> classvalue();
         optional<ClassParams> classparam();
         optional<Class> class_();
-        bool creaparam();
+        optional<CreaParam> creaparam();
         optional<Created> created();
         optional<DescParams> descparam();
         optional<Description> description();

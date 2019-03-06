@@ -196,7 +196,11 @@ struct ClassParams : having_other_params {};
 struct Class : having_string_value {
         ClassParams params;
 };
-struct Created {};
+struct CreaParam : having_other_params {};
+struct Created {
+        CreaParam params;
+        DateTime dateTime;
+};
 struct DescParams : having_other_params {
         optional<AltRepParam> alt_rep;
         optional<LanguageParam> language;
