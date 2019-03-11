@@ -217,7 +217,23 @@ struct Geo {
         GeoParams params;
         GeoValue value;
 };
-struct LastMod {};
+
+struct LstParams : having_other_params {};
+struct LastMod {
+        LstParams params;
+        DateTime dateTime;
+};
+
+struct StatvalueEvent : having_string_value {};
+struct StatvalueTodo : having_string_value  {};
+struct StatvalueJour : having_string_value  {};
+using Statvalue = xvariant<StatvalueEvent, StatvalueTodo, StatvalueJour>;
+
+struct StatParams : having_other_params {};
+struct Status {
+        StatParams params;
+        Statvalue value;
+};
 
 struct LocParams : having_other_params {
         optional<AltRepParam> alt_rep;
@@ -236,7 +252,7 @@ struct SeqParams : having_other_params { };
 struct Seq : having_integer_value {
         SeqParams params;
 };
-struct Status {};
+
 struct SummParams : having_other_params {
         optional<AltRepParam> alt_rep;
         optional<LanguageParam> language;

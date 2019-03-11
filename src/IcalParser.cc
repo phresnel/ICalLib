@@ -1,4 +1,5 @@
 #include <iostream>
+#include "rfc3629.hh"
 #include "rfc3986.hh"
 #include "rfc4288.hh"
 #include "rfc5234.hh"
@@ -434,361 +435,385 @@ optional<string> IcalParser::vendorid() {
 //     ; Any character except CONTROL, DQUOTE, ";", ":", ","
 optional<string> IcalParser::safe_char() {
         CALLSTACK;
-        save_input_pos ptran(is);
-        // WSP
-        if (auto v = read_wsp(is)) {
-                ptran.commit();
-                return *v;
-        }
-        const auto i = is.get();
-        switch(i) {
-                // %x21
-        case '!':
-                // %x23-2B
-        case '#':
-        case '$':
-        case '%':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case '+':
-                // %x2D-39
-        case '-':
-        case '.':
-        case '/':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-                // %x3C-7E
-        case '<':
-        case '=':
-        case '>':
-        case '?':
-        case '@':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-        case '[':
-        case '\\':
-        case ']':
-        case '^':
-        case '_':
-        case '`':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        case '{':
-        case '|':
-        case '}':
-        case '~':
-                ptran.commit();
-                return string() + char(i);
+        {
+                save_input_pos ptran(is);
+                // WSP
+                if (auto v = read_wsp(is)) {
+                        ptran.commit();
+                        return *v;
+                }
+                const auto i = is.get();
+                switch (i) {
+                        // %x21
+                case '!':
+                        // %x23-2B
+                case '#':
+                case '$':
+                case '%':
+                case '&':
+                case '\'':
+                case '(':
+                case ')':
+                case '*':
+                case '+':
+                        // %x2D-39
+                case '-':
+                case '.':
+                case '/':
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                        // %x3C-7E
+                case '<':
+                case '=':
+                case '>':
+                case '?':
+                case '@':
+                case 'A':
+                case 'B':
+                case 'C':
+                case 'D':
+                case 'E':
+                case 'F':
+                case 'G':
+                case 'H':
+                case 'I':
+                case 'J':
+                case 'K':
+                case 'L':
+                case 'M':
+                case 'N':
+                case 'O':
+                case 'P':
+                case 'Q':
+                case 'R':
+                case 'S':
+                case 'T':
+                case 'U':
+                case 'V':
+                case 'W':
+                case 'X':
+                case 'Y':
+                case 'Z':
+                case '[':
+                case '\\':
+                case ']':
+                case '^':
+                case '_':
+                case '`':
+                case 'a':
+                case 'b':
+                case 'c':
+                case 'd':
+                case 'e':
+                case 'f':
+                case 'g':
+                case 'h':
+                case 'i':
+                case 'j':
+                case 'k':
+                case 'l':
+                case 'm':
+                case 'n':
+                case 'o':
+                case 'p':
+                case 'q':
+                case 'r':
+                case 's':
+                case 't':
+                case 'u':
+                case 'v':
+                case 'w':
+                case 'x':
+                case 'y':
+                case 'z':
+                case '{':
+                case '|':
+                case '}':
+                case '~':
+                        ptran.commit();
+                        return string() + char(i);
+                }
         }
 
-        // NON-US-ASCII
-        //std::cerr << "todo: non-us-ascii" << std::endl;
-        return nullopt;
+        if (auto v = non_us_ascii())
+                return *v;
+        return nullopt; // error
 }
 
 //     VALUE-CHAR    = WSP / %x21-7E / NON-US-ASCII
 //     ; Any textual character
 optional<string> IcalParser::value_char() {
         CALLSTACK;
-        save_input_pos ptran(is);
-        // WSP
-        if (auto v = read_wsp(is)) {
-                ptran.commit();
-                return v;
-        }
-        const auto i = is.get();
-        switch(i) {
-                // %x21-7E
-        case '!':
-        case '"':
-        case '#':
-        case '$':
-        case '%':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case '+':
-        case ',':
-        case '-':
-        case '.':
-        case '/':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-        case ':':
-        case ';':
-        case '<':
-        case '=':
-        case '>':
-        case '?':
-        case '@':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-        case '[':
-        case '\\':
-        case ']':
-        case '^':
-        case '_':
-        case '`':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        case '{':
-        case '|':
-        case '}':
-        case '~':
-                ptran.commit();
-                return string() + char(i);
+        {
+                save_input_pos ptran(is);
+                // WSP
+                if (auto v = read_wsp(is)) {
+                        ptran.commit();
+                        return v;
+                }
+                const auto i = is.get();
+                switch (i) {
+                        // %x21-7E
+                case '!':
+                case '"':
+                case '#':
+                case '$':
+                case '%':
+                case '&':
+                case '\'':
+                case '(':
+                case ')':
+                case '*':
+                case '+':
+                case ',':
+                case '-':
+                case '.':
+                case '/':
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                case ':':
+                case ';':
+                case '<':
+                case '=':
+                case '>':
+                case '?':
+                case '@':
+                case 'A':
+                case 'B':
+                case 'C':
+                case 'D':
+                case 'E':
+                case 'F':
+                case 'G':
+                case 'H':
+                case 'I':
+                case 'J':
+                case 'K':
+                case 'L':
+                case 'M':
+                case 'N':
+                case 'O':
+                case 'P':
+                case 'Q':
+                case 'R':
+                case 'S':
+                case 'T':
+                case 'U':
+                case 'V':
+                case 'W':
+                case 'X':
+                case 'Y':
+                case 'Z':
+                case '[':
+                case '\\':
+                case ']':
+                case '^':
+                case '_':
+                case '`':
+                case 'a':
+                case 'b':
+                case 'c':
+                case 'd':
+                case 'e':
+                case 'f':
+                case 'g':
+                case 'h':
+                case 'i':
+                case 'j':
+                case 'k':
+                case 'l':
+                case 'm':
+                case 'n':
+                case 'o':
+                case 'p':
+                case 'q':
+                case 'r':
+                case 's':
+                case 't':
+                case 'u':
+                case 'v':
+                case 'w':
+                case 'x':
+                case 'y':
+                case 'z':
+                case '{':
+                case '|':
+                case '}':
+                case '~':
+                        ptran.commit();
+                        return string() + char(i);
+                }
         }
 
-        // NON-US-ASCII
-        //std::cerr << "todo: non-us-ascii" << std::endl;
-        return nullopt;
+        if (auto v = non_us_ascii())
+                return *v;
+        return nullopt; // error
 }
 
 //     QSAFE-CHAR    = WSP / %x21 / %x23-7E / NON-US-ASCII
 //     ; Any character except CONTROL and DQUOTE
 optional<string> IcalParser::qsafe_char() {
         CALLSTACK;
-        save_input_pos ptran(is);
-        // WSP
-        if (auto v = read_wsp(is)) {
-                ptran.commit();
-                return v;
-        }
-        const auto i = is.get();
-        switch(i) {
-                // %x21
-        case '!':
-                // %x23-7E
-        case '#':
-        case '$':
-        case '%':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case '+':
-        case ',':
-        case '-':
-        case '.':
-        case '/':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-        case ':':
-        case ';':
-        case '<':
-        case '=':
-        case '>':
-        case '?':
-        case '@':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-        case '[':
-        case '\\':
-        case ']':
-        case '^':
-        case '_':
-        case '`':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        case '{':
-        case '|':
-        case '}':
-        case '~':
-                ptran.commit();
-                return string() + char(i);
+        {
+                save_input_pos ptran(is);
+                // WSP
+                if (auto v = read_wsp(is)) {
+                        ptran.commit();
+                        return v;
+                }
+                const auto i = is.get();
+                switch (i) {
+                        // %x21
+                case '!':
+                        // %x23-7E
+                case '#':
+                case '$':
+                case '%':
+                case '&':
+                case '\'':
+                case '(':
+                case ')':
+                case '*':
+                case '+':
+                case ',':
+                case '-':
+                case '.':
+                case '/':
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+                case ':':
+                case ';':
+                case '<':
+                case '=':
+                case '>':
+                case '?':
+                case '@':
+                case 'A':
+                case 'B':
+                case 'C':
+                case 'D':
+                case 'E':
+                case 'F':
+                case 'G':
+                case 'H':
+                case 'I':
+                case 'J':
+                case 'K':
+                case 'L':
+                case 'M':
+                case 'N':
+                case 'O':
+                case 'P':
+                case 'Q':
+                case 'R':
+                case 'S':
+                case 'T':
+                case 'U':
+                case 'V':
+                case 'W':
+                case 'X':
+                case 'Y':
+                case 'Z':
+                case '[':
+                case '\\':
+                case ']':
+                case '^':
+                case '_':
+                case '`':
+                case 'a':
+                case 'b':
+                case 'c':
+                case 'd':
+                case 'e':
+                case 'f':
+                case 'g':
+                case 'h':
+                case 'i':
+                case 'j':
+                case 'k':
+                case 'l':
+                case 'm':
+                case 'n':
+                case 'o':
+                case 'p':
+                case 'q':
+                case 'r':
+                case 's':
+                case 't':
+                case 'u':
+                case 'v':
+                case 'w':
+                case 'x':
+                case 'y':
+                case 'z':
+                case '{':
+                case '|':
+                case '}':
+                case '~':
+                        ptran.commit();
+                        return string() + char(i);
+                }
         }
 
-        // NON-US-ASCII
-        //std::cerr << "todo: non-us-ascii" << std::endl;
-        return nullopt;
+        if (auto v = non_us_ascii())
+                return *v;
+        return nullopt; // error
 }
 
 //     NON-US-ASCII  = UTF8-2 / UTF8-3 / UTF8-4
 //     ; UTF8-2, UTF8-3, and UTF8-4 are defined in [RFC3629]
 optional<string> IcalParser::non_us_ascii() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+
+        if (auto v = read_utf8_2(is)) return *v;
+        else if (auto v = read_utf8_3(is)) return *v;
+        else if (auto v = read_utf8_4(is)) return *v;
+
+        return nullopt; // error
 }
 
 //     CONTROL       = %x00-08 / %x0A-1F / %x7F
 //     ; All the controls except HTAB
 optional<string> IcalParser::control() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
+        save_input_pos ptran(is);
+
+        const auto a = is.get();
+
+        const auto A = (a>=0x00) && (a<=0x08);
+        const auto B = (a>=0x0A) && (a<=0x1F);
+        const auto C = (a==0x7F);
+
+        const auto match = A || B || C;
+        if (!match)
+                return nullopt;
+
+        ptran.commit();
+        return string() + char(a);
 }
 
 //     value         = *VALUE-CHAR
@@ -1278,119 +1303,121 @@ optional<string> IcalParser::escaped_char() {
 //          ; character set, DQUOTE, ";", ":", "\", ","
 optional<string> IcalParser::tsafe_char() {
         CALLSTACK;
-        save_input_pos ptran(is);
-        // WSP
-        if (auto c = read_wsp(is)) {
-                ptran.commit();
-                return c;
+        {
+                save_input_pos ptran(is);
+                // WSP
+                if (auto c = read_wsp(is)) {
+                        ptran.commit();
+                        return c;
+                }
+                const auto i = is.get();
+                switch (i) {
+                        // %x21
+                case '!':
+
+                        // %x23-2B
+                case '#':
+                case '$':
+                case '%':
+                case '&':
+                case '\'':
+                case '(':
+                case ')':
+                case '*':
+                case '+':
+
+                        // %x2D-39
+                case '-':
+                case '.':
+                case '/':
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9':
+
+                        // %x3C-5B
+                case '<':
+                case '=':
+                case '>':
+                case '?':
+                case '@':
+                case 'A':
+                case 'B':
+                case 'C':
+                case 'D':
+                case 'E':
+                case 'F':
+                case 'G':
+                case 'H':
+                case 'I':
+                case 'J':
+                case 'K':
+                case 'L':
+                case 'M':
+                case 'N':
+                case 'O':
+                case 'P':
+                case 'Q':
+                case 'R':
+                case 'S':
+                case 'T':
+                case 'U':
+                case 'V':
+                case 'W':
+                case 'X':
+                case 'Y':
+                case 'Z':
+                case '[':
+
+                        // %x5D-7E
+                case ']':
+                case '^':
+                case '_':
+                case '`':
+                case 'a':
+                case 'b':
+                case 'c':
+                case 'd':
+                case 'e':
+                case 'f':
+                case 'g':
+                case 'h':
+                case 'i':
+                case 'j':
+                case 'k':
+                case 'l':
+                case 'm':
+                case 'n':
+                case 'o':
+                case 'p':
+                case 'q':
+                case 'r':
+                case 's':
+                case 't':
+                case 'u':
+                case 'v':
+                case 'w':
+                case 'x':
+                case 'y':
+                case 'z':
+                case '{':
+                case '|':
+                case '}':
+                case '~':
+                        ptran.commit();
+                        return string() + (char) i;
+                }
         }
-        const auto i = is.get();
-        switch(i) {
-                // %x21
-        case '!':
 
-                // %x23-2B
-        case '#':
-        case '$':
-        case '%':
-        case '&':
-        case '\'':
-        case '(':
-        case ')':
-        case '*':
-        case '+':
-
-                // %x2D-39
-        case '-':
-        case '.':
-        case '/':
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-
-                // %x3C-5B
-        case '<':
-        case '=':
-        case '>':
-        case '?':
-        case '@':
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-        case '[':
-
-                // %x5D-7E
-        case ']':
-        case '^':
-        case '_':
-        case '`':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        case '{':
-        case '|':
-        case '}':
-        case '~':
-                ptran.commit();
-                return string() + (char)i;
-        }
-
-        // NON-US-ASCII
-        //std::cerr << "todo: non-us-ascii" << std::endl;
-        return nullopt;
+        if (auto v = non_us_ascii())
+                return *v;
+        return nullopt; // error
 }
 
 
@@ -2569,27 +2596,37 @@ optional<Geo> IcalParser::geo() {
         return ret;
 }
 //       lstparam   = *(";" other-param)
-bool IcalParser::lstparam() {
+optional<LstParams> IcalParser::lstparam() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        LstParams ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
+                else return nullopt;
+        }
         ptran.commit();
-        return true;
+        return ret;
 }
 //       last-mod   = "LAST-MODIFIED" lstparam ":" date-time CRLF
 optional<LastMod> IcalParser::last_mod() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                token("LAST-MODIFIED") &&
-                lstparam() &&
-                token(":") &&
-                date_time() &&
-                newline();
-        if (!success)
-                return nullopt;
+        LastMod ret;
+
+        if (!token("LAST-MODIFIED")) return nullopt;
+
+        if (auto v = lstparam()) ret.params = *v;
+        else return nullopt;
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = date_time()) ret.dateTime = *v;
+        return nullopt;
+
+        if (!newline()) return nullopt; // error
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
 
 //       locparam   = *(
@@ -2786,16 +2823,24 @@ optional<Seq> IcalParser::seq() {
         ptran.commit();
         return ret;
 }
-//       statvalue-jour  = "DRAFT"        ;Indicates journal is draft.
-//                       / "FINAL"        ;Indicates journal is final.
-//                       / "CANCELLED"    ;Indicates journal is removed.
-//      ;Status values for "VJOURNAL".
-bool IcalParser::statvalue_jour() {
+
+
+//       statvalue-event = "TENTATIVE"    ;Indicates event is tentative.
+//                       / "CONFIRMED"    ;Indicates event is definite.
+//                       / "CANCELLED"    ;Indicates event was cancelled.
+//       ;Status values for a "VEVENT"
+optional<StatvalueEvent> IcalParser::statvalue_event() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        StatvalueEvent ret;
+
+        if (auto v = token("TENTATIVE")) ret.value = *v;
+        else if (auto v = token("CONFIRMED")) ret.value = *v;
+        else if (auto v = token("CANCELLED")) ret.value = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       statvalue-todo  = "NEEDS-ACTION" ;Indicates to-do needs action.
@@ -2803,62 +2848,91 @@ bool IcalParser::statvalue_jour() {
 //                       / "IN-PROCESS"   ;Indicates to-do in process of.
 //                       / "CANCELLED"    ;Indicates to-do was cancelled.
 //       ;Status values for "VTODO".
-bool IcalParser::statvalue_todo() {
+optional<StatvalueTodo> IcalParser::statvalue_todo() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        StatvalueTodo ret;
+
+        if (auto v = token("NEEDS-ACTION")) ret.value = *v;
+        else if (auto v = token("COMPLETED")) ret.value = *v;
+        else if (auto v = token("IN-PROCESS")) ret.value = *v;
+        else if (auto v = token("CANCELLED")) ret.value = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
+//       statvalue-jour  = "DRAFT"        ;Indicates journal is draft.
+//                       / "FINAL"        ;Indicates journal is final.
+//                       / "CANCELLED"    ;Indicates journal is removed.
+//      ;Status values for "VJOURNAL".
+optional<StatvalueJour> IcalParser::statvalue_jour() {
+        CALLSTACK;
+        save_input_pos ptran(is);
+        StatvalueJour ret;
+
+        if (auto v = token("DRAFT")) ret.value = *v;
+        else if (auto v = token("FINAL")) ret.value = *v;
+        else if (auto v = token("CANCELLED")) ret.value = *v;
+        else return nullopt;
+
+        ptran.commit();
+        return ret;
+}
 
 //       statvalue       = (statvalue-event
 //                       /  statvalue-todo
 //                       /  statvalue-jour)
-bool IcalParser::statvalue() {
+optional<Statvalue> IcalParser::statvalue() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
-        ptran.commit();
-        return true;
-}
+        Statvalue ret;
 
-//       statvalue-event = "TENTATIVE"    ;Indicates event is tentative.
-//                       / "CONFIRMED"    ;Indicates event is definite.
-//                       / "CANCELLED"    ;Indicates event was cancelled.
-//       ;Status values for a "VEVENT"
-bool IcalParser::statvalue_event() {
-        CALLSTACK;
-        NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        if (auto v = statvalue_event()) ret = *v;
+        else if (auto v = statvalue_todo()) ret = *v;
+        else if (auto v = statvalue_jour()) ret = *v;
+        else return nullopt;
+
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       statparam       = *(";" other-param)
-bool IcalParser::statparam() {
+optional<StatParams> IcalParser::statparam() {
         CALLSTACK;
-        NOT_IMPLEMENTED;
         save_input_pos ptran(is);
+        StatParams ret;
+        while (token(";")) {
+                if (auto v = other_param()) ret.params.push_back(*v);
+                else return nullopt;
+        }
         ptran.commit();
-        return true;
+        return ret;
 }
 
 //       status          = "STATUS" statparam ":" statvalue CRLF
 optional<Status> IcalParser::status() {
         CALLSTACK;
         save_input_pos ptran(is);
-        const auto success =
-                token("STATUS") &&
-                statparam() &&
-                token(":") &&
-                statvalue() &&
-                newline();
-        if (!success)
-                return nullopt;
+        Status ret;
+
+        if (!token("STATUS")) return nullopt;
+
+        if (auto v = statparam()) ret.params = *v;
+        else return nullopt; // error
+
+        if (!token(":")) return nullopt; // error
+
+        if (auto v = statvalue()) ret.value = *v;
+        else return nullopt;
+
+        if (!newline()) return nullopt; // error
+
         ptran.commit();
-        NOT_IMPLEMENTED;
+        return ret;
 }
+
 //       summparam  = *(
 //                  ;
 //                  ; The following are OPTIONAL,
@@ -2898,8 +2972,8 @@ optional<Summary> IcalParser::summary() {
         CALLSTACK;
         save_input_pos ptran(is);
         Summary ret;
-        if (!token("SUMMARY"))
-                return nullopt;
+
+        if (!token("SUMMARY"))  return nullopt;
 
         if (auto v = summparam()) ret.params = *v;
         else return nullopt;

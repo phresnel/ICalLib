@@ -13,6 +13,7 @@ add_executable(
         include/icalstream.hh     src/icalstream.cc
         include/ICalParser.hh     src/IcalParser.cc
         include/parser_helpers.hh src/parser_helpers.cc
+        include/rfc3629.hh        src/rfc3629.cc
         include/rfc3986.hh        src/rfc3986.cc
         include/rfc4288.hh        src/rfc4288.cc
         include/rfc5234.hh        src/rfc5234.cc

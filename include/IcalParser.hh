@@ -171,7 +171,7 @@ public:
         optional<GeoValue> geovalue();
         optional<GeoParams> geoparam();
         optional<Geo> geo();
-        bool lstparam();
+        optional<LstParams> lstparam();
         optional<LastMod> last_mod();
         bool locparam_single();
         optional<LocParams> locparam();
@@ -184,11 +184,11 @@ public:
         optional<Priority> priority();
         optional<SeqParams> seqparam();
         optional<Seq> seq();
-        bool statvalue_jour();
-        bool statvalue_todo();
-        bool statvalue();
-        bool statvalue_event();
-        bool statparam();
+        optional<StatvalueEvent> statvalue_event();
+        optional<StatvalueTodo> statvalue_todo();
+        optional<StatvalueJour> statvalue_jour();
+        optional<Statvalue> statvalue();
+        optional<StatParams> statparam();
         optional<Status> status();
         bool summparam_single();
         optional<SummParams> summparam();

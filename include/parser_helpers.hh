@@ -2,6 +2,7 @@
 #define PARSER_HELPERS_HH_INCLUDED_20190201
 
 #include <iostream> // should only need iosfwd here.
+#include <iomanip>
 #include <vector>
 #include <string>
 #include <optional>
@@ -108,6 +109,10 @@ extern CallStack callStack;
         print_location(is.tellg(), is);\
         CallStack::Entry \
                 call_stack_entry_##__LINE__ = callStack.push(__func__);
+#elif 1
+#define CALLSTACK \
+        std::cerr << "[func: " << std::setw(16) << __func__ << "] "; \
+        print_location(is.tellg(), is);
 #else
 #define CALLSTACK
 #endif
