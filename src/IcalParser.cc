@@ -10,7 +10,7 @@
 
 string IcalParser::expect_token(string const &tok) {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         for (auto &c : tok) {
                 const auto i = is.get();
                 if(i == EOF) {
@@ -34,7 +34,7 @@ optional<string> IcalParser::token(string const &tok) {
 }
 
 optional<string> IcalParser::eof() {
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto c = is.get();
         if (c != EOF)
                 return nullopt;
@@ -45,9 +45,10 @@ optional<string> IcalParser::eof() {
 string IcalParser::expect_newline() {
         CALLSTACK;
         // Even though RFC 5545 says just "CRLF", we also handle "CR" and "LF".
+        // TODO: Is there a need to unify this with Unfolder::absorb_folds()?
 
-        std::istream::sentry se(is, true);
-        std::streambuf* sb = is.rdbuf();
+        std::istream::sentry se(*is, true);
+        std::streambuf* sb = is->rdbuf();
 
         switch (sb->sgetc()) {
         case '\n':
@@ -61,10 +62,10 @@ string IcalParser::expect_newline() {
                 }
                 return "\r";
         case std::streambuf::traits_type::eof():
-                is.setstate(std::ios::eofbit);
+                is->setstate(std::ios::eofbit);
                 return "";
         };
-        throw unexpected_token(is.tellg());
+        throw unexpected_token(is->tellg());
 }
 
 optional<string> IcalParser::newline() {
@@ -78,7 +79,7 @@ optional<string> IcalParser::newline() {
 
 optional<string> IcalParser::hex() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto i = is.get();
         switch(i) {
         default:
@@ -115,7 +116,7 @@ optional<string> IcalParser::hex() {
 
 string IcalParser::expect_alpha() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto i = is.get();
         switch(i) {
         default:
@@ -191,7 +192,7 @@ optional<string> IcalParser::alpha() {
 
 string IcalParser::expect_digit() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto i = is.get();
         if (i<'0' || i>'9')
                 throw syntax_error(is.tellg(), "expected digit");
@@ -201,7 +202,7 @@ string IcalParser::expect_digit() {
 
 string IcalParser::expect_digit(int min, int max) {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto i = is.get();
         if (i<'0'+min || i>'0'+max)
                 throw syntax_error(is.tellg(),
@@ -232,7 +233,7 @@ optional<string> IcalParser::digit(int min, int max) {
 
 optional<string> IcalParser::digits(int at_least, int at_most) {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         int c = 0;
         string ret;
         optional<string> tmp;
@@ -257,7 +258,7 @@ optional<string> IcalParser::digits(int num) {
 
 string IcalParser::expect_alnum() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (auto v = alpha()) {
                 ptran.commit();
                 return *v;
@@ -283,7 +284,7 @@ tuple<string, string> IcalParser::expect_key_value_newline(
         string const &v
 ) {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token(k) &&
                 token(":") &&
@@ -345,7 +346,7 @@ optional<tuple<string, string>> IcalParser::key_value_newline(
 //    contentline   = name *(";" param ) ":" value CRLF
 ContentLine IcalParser::expect_contentline() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ContentLine ret;
         ret.name = expect_name();
         while (token(";")) {
@@ -408,7 +409,7 @@ string IcalParser::expect_iana_token() {
 //     ; Vendor identification
 string IcalParser::expect_vendorid() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         string ret;
         ret += expect_alnum();
@@ -436,9 +437,9 @@ optional<string> IcalParser::vendorid() {
 optional<string> IcalParser::safe_char() {
         CALLSTACK;
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 // WSP
-                if (auto v = read_wsp(is)) {
+                if (auto v = read_wsp(*is)) {
                         ptran.commit();
                         return *v;
                 }
@@ -553,9 +554,9 @@ optional<string> IcalParser::safe_char() {
 optional<string> IcalParser::value_char() {
         CALLSTACK;
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 // WSP
-                if (auto v = read_wsp(is)) {
+                if (auto v = read_wsp(*is)) {
                         ptran.commit();
                         return v;
                 }
@@ -671,9 +672,9 @@ optional<string> IcalParser::value_char() {
 optional<string> IcalParser::qsafe_char() {
         CALLSTACK;
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 // WSP
-                if (auto v = read_wsp(is)) {
+                if (auto v = read_wsp(*is)) {
                         ptran.commit();
                         return v;
                 }
@@ -789,9 +790,9 @@ optional<string> IcalParser::qsafe_char() {
 optional<string> IcalParser::non_us_ascii() {
         CALLSTACK;
 
-        if (auto v = read_utf8_2(is)) return *v;
-        else if (auto v = read_utf8_3(is)) return *v;
-        else if (auto v = read_utf8_4(is)) return *v;
+        if (auto v = read_utf8_2(*is)) return *v;
+        else if (auto v = read_utf8_3(*is)) return *v;
+        else if (auto v = read_utf8_4(*is)) return *v;
 
         return nullopt; // error
 }
@@ -800,7 +801,7 @@ optional<string> IcalParser::non_us_ascii() {
 //     ; All the controls except HTAB
 optional<string> IcalParser::control() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         const auto a = is.get();
 
@@ -834,7 +835,7 @@ string IcalParser::expect_value() {
 //
 Param IcalParser::expect_param() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Param ret;
         ret.name = expect_param_name();
         expect_token("=");
@@ -892,7 +893,7 @@ optional<string> IcalParser::paramtext() {
 //     quoted-string = DQUOTE *QSAFE-CHAR DQUOTE
 optional<string> IcalParser::quoted_string() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         if (!dquote())
                 return nullopt;
@@ -923,7 +924,7 @@ optional<string> IcalParser::quoted_string() {
 //                  "END" ":" "VCALENDAR" CRLF
 Calendar IcalParser::expect_ical() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Calendar ret;
         expect_key_value_newline("BEGIN", "VCALENDAR");
         ret = expect_icalbody();
@@ -945,7 +946,7 @@ optional<Calendar> IcalParser::ical() {
 //       icalbody   = calprops component
 Calendar IcalParser::expect_icalbody() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Calendar ret;
         ret.properties = expect_calprops();
         ret.components = expect_component();
@@ -973,7 +974,7 @@ Calendar IcalParser::expect_icalbody() {
 //                  )
 CalProps IcalParser::expect_calprops() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         CalProps ret;
         int prodidc = 0,
             versionc = 0,
@@ -1004,7 +1005,7 @@ CalProps IcalParser::expect_calprops() {
 //       prodid     = "PRODID" pidparam ":" pidvalue CRLF
 ProdId IcalParser::expect_prodid() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ProdId ret;
         expect_token("PRODID");
         ret.params = expect_pidparam();
@@ -1026,7 +1027,7 @@ optional<ProdId> IcalParser::prodid() {
 //       version    = "VERSION" verparam ":" vervalue CRLF
 Version IcalParser::expect_version() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Version ret;
         expect_token("VERSION");
         ret.params = expect_verparam();
@@ -1048,7 +1049,7 @@ optional<Version> IcalParser::version() {
 //       verparam   = *(";" other-param)
 std::vector<OtherParam> IcalParser::expect_verparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         std::vector<OtherParam> ret;
         while(token(";")) {
                 ret.push_back(expect_other_param());
@@ -1074,7 +1075,7 @@ string IcalParser::expect_vervalue() {
 //       calscale   = "CALSCALE" calparam ":" calvalue CRLF
 CalScale IcalParser::expect_calscale() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         CalScale ret;
         expect_token("CALSCALE");
         ret.params = expect_calparam();
@@ -1096,7 +1097,7 @@ optional<CalScale> IcalParser::calscale() {
 //       calparam   = *(";" other-param)
 vector<OtherParam> IcalParser::expect_calparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         vector<OtherParam> ret;
         while (token(";"))
                 ret.push_back(expect_other_param());
@@ -1121,7 +1122,7 @@ optional<Method> IcalParser::method() {
 }
 Method IcalParser::expect_method() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Method ret;
         expect_token("METHOD");
         ret.params = expect_metparam();
@@ -1135,7 +1136,7 @@ Method IcalParser::expect_method() {
 //       metparam   = *(";" other-param)
 std::vector<OtherParam> IcalParser::expect_metparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         std::vector<OtherParam> ret;
         while (token(";"))
                 ret.push_back(expect_other_param());
@@ -1152,7 +1153,7 @@ string IcalParser::expect_metvalue() {
 //       x-prop = x-name *(";" icalparameter) ":" value CRLF
 XProp IcalParser::expect_x_prop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         XProp ret;
         ret.name = expect_x_name();
         while (token(";")) {
@@ -1178,7 +1179,7 @@ optional<XProp> IcalParser::x_prop() {
 //     ; Reserved for experimental use.
 string IcalParser::expect_x_name() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         string ret;
 
@@ -1228,7 +1229,7 @@ optional<string> IcalParser::x_name() {
 //       iana-prop = iana-token *(";" icalparameter) ":" value CRLF
 void IcalParser::expect_iana_prop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         expect_iana_token();
         while (token(";"))
                 expect_icalparameter();
@@ -1252,7 +1253,7 @@ optional<IanaProp> IcalParser::iana_prop() {
 //       pidparam   = *(";" other-param)
 std::vector<OtherParam> IcalParser::expect_pidparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         std::vector<OtherParam> ret;
         while (token(";"))
                 ret.push_back(expect_other_param());
@@ -1304,9 +1305,9 @@ optional<string> IcalParser::escaped_char() {
 optional<string> IcalParser::tsafe_char() {
         CALLSTACK;
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 // WSP
-                if (auto c = read_wsp(is)) {
+                if (auto c = read_wsp(*is)) {
                         ptran.commit();
                         return c;
                 }
@@ -1444,7 +1445,7 @@ string IcalParser::expect_text() {
 // DQUOTE: ASCII 22 == '"'
 optional<string> IcalParser::dquote() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto c = is.get();
         if (c != '"')
                 return nullopt;
@@ -1469,7 +1470,7 @@ bool IcalParser::binary() {
 //       float      = (["+"] / "-") 1*DIGIT ["." 1*DIGIT]
 optional<string> IcalParser::float_() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         string ret;
 
         // (["+"] / "-")
@@ -1503,7 +1504,7 @@ optional<string> IcalParser::float_() {
 //       integer    = (["+"] / "-") 1*DIGIT
 optional<int> IcalParser::integer() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         string raw;
         // (["+"] / "-")
@@ -1525,7 +1526,7 @@ optional<int> IcalParser::integer() {
 //       actionvalue = "AUDIO" / "DISPLAY" / "EMAIL" / iana-token / x-name
 optional<string> IcalParser::actionvalue() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         string ret;
 
         if (auto v = token("AUDIO")) ret = *v;
@@ -1541,7 +1542,7 @@ optional<string> IcalParser::actionvalue() {
 //       actionparam = *(";" other-param)
 optional<ActionParam> IcalParser::actionparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ActionParam ret;
 
         while (token(";")) {
@@ -1554,7 +1555,7 @@ optional<ActionParam> IcalParser::actionparam() {
 //       action      = "ACTION" actionparam ":" actionvalue CRLF
 optional<Action> IcalParser::action() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Action ret;
         if (!token("ACTION")) return nullopt;
 
@@ -1586,12 +1587,12 @@ optional<Action> IcalParser::action() {
 //                  ) ":" date-time
 optional<TrigAbs> IcalParser::trigabs() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TrigAbs ret;
 
         while (token(";")) {
                 {
-                        save_input_pos ptran(is);
+                        save_input_pos ptran(*is);
                         auto match = token("VALUE") &&
                                      token("=") &&
                                      token("DATE-TIME");
@@ -1634,12 +1635,12 @@ optional<TrigAbs> IcalParser::trigabs() {
 
 optional<TrigRel> IcalParser::trigrel() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TrigRel ret;
 
         while (token(";")) {
                 {
-                        save_input_pos ptran(is);
+                        save_input_pos ptran(*is);
                         auto match = token("VALUE") &&
                                      token("=") &&
                                      token("DURATION");
@@ -1670,7 +1671,7 @@ optional<TrigRel> IcalParser::trigrel() {
 //       trigger    = "TRIGGER" (trigrel / trigabs) CRLF
 optional<Trigger> IcalParser::trigger() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Trigger ret;
 
         if (!token("TRIGGER")) return nullopt;
@@ -1687,7 +1688,7 @@ optional<Trigger> IcalParser::trigger() {
 //       repparam   = *(";" other-param)
 optional<RepParam> IcalParser::repparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RepParam ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -1699,7 +1700,7 @@ optional<RepParam> IcalParser::repparam() {
 //       repeat  = "REPEAT" repparam ":" integer CRLF  ;Default is "0", zero.
 optional<Repeat> IcalParser::repeat() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Repeat ret;
 
         if (!token("REPEAT")) return nullopt;
@@ -1744,7 +1745,7 @@ optional<Repeat> IcalParser::repeat() {
 //                  )
 optional<AudioProp> IcalParser::audioprop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         AudioProp ret;
 
         bool req_act = false, req_trig = false;
@@ -1799,7 +1800,7 @@ optional<AudioProp> IcalParser::audioprop() {
 //                  )
 optional<DispProp> IcalParser::dispprop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DispProp ret;
 
         bool req_act = false, req_desc = false, req_trig = false;
@@ -1863,7 +1864,7 @@ optional<DispProp> IcalParser::dispprop() {
 //                  )
 optional<EmailProp> IcalParser::emailprop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         EmailProp ret;
 
         bool req_act = false,
@@ -1918,7 +1919,7 @@ optional<EmailProp> IcalParser::emailprop() {
 //                    "END" ":" "VALARM" CRLF
 optional<Alarm> IcalParser::alarmc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Alarm ret;
 
         if (!key_value_newline("BEGIN", "VALARM")) return nullopt;
@@ -1961,7 +1962,7 @@ optional<string> IcalParser::date_mday() {
 //       date-value         = date-fullyear date-month date-mday
 optional<Date> IcalParser::date_value() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Date ret;
 
         if (auto v = date_fullyear()) ret.year = *v;
@@ -1986,7 +1987,7 @@ optional<Date> IcalParser::date() {
 //       time-hour    = 2DIGIT        ;00-23
 optional<TimeHour> IcalParser::time_hour() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TimeHour ret;
         if (auto v = digits(2)) ret.value = *v;
         else return nullopt;
@@ -1997,7 +1998,7 @@ optional<TimeHour> IcalParser::time_hour() {
 //       time-minute  = 2DIGIT        ;00-59
 optional<TimeMinute> IcalParser::time_minute() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TimeMinute ret;
         if (auto v = digits(2)) ret.value = *v;
         else return nullopt;
@@ -2009,7 +2010,7 @@ optional<TimeMinute> IcalParser::time_minute() {
 //       ;The "60" value is used to account for positive "leap" seconds.
 optional<TimeSecond> IcalParser::time_second() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TimeSecond ret;
         if (auto v = digits(2)) ret.value = *v;
         else return nullopt;
@@ -2026,7 +2027,7 @@ optional<string> IcalParser::time_utc() {
 //       time         = time-hour time-minute time-second [time-utc]
 optional<Time> IcalParser::time() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Time ret;
 
         if (auto v = time_hour()) ret.hour = *v;
@@ -2048,7 +2049,7 @@ optional<Time> IcalParser::time() {
 //                                  ;value definitions
 optional<DateTime> IcalParser::date_time() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DateTime ret;
 
         if (auto v = date()) ret.date = *v;
@@ -2066,7 +2067,7 @@ optional<DateTime> IcalParser::date_time() {
 //       dur-week   = 1*DIGIT "W"
 optional<DurWeek> IcalParser::dur_week() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurWeek ret;
 
         if (auto v = digits(1, -1)) ret.value = *v;
@@ -2081,7 +2082,7 @@ optional<DurWeek> IcalParser::dur_week() {
 //       dur-second = 1*DIGIT "S"
 optional<DurSecond> IcalParser::dur_second() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurSecond ret;
 
         if (auto v = digits(1, -1)) ret.second = *v;
@@ -2096,7 +2097,7 @@ optional<DurSecond> IcalParser::dur_second() {
 //       dur-minute = 1*DIGIT "M" [dur-second]
 optional<DurMinute> IcalParser::dur_minute() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurMinute ret;
 
         if (auto v = digits(1, -1)) ret.minute = *v;
@@ -2113,7 +2114,7 @@ optional<DurMinute> IcalParser::dur_minute() {
 //       dur-hour   = 1*DIGIT "H" [dur-minute]
 optional<DurHour> IcalParser::dur_hour() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurHour ret;
 
         if (auto v = digits(1, -1)) ret.hour = *v;
@@ -2130,7 +2131,7 @@ optional<DurHour> IcalParser::dur_hour() {
 //       dur-day    = 1*DIGIT "D"
 optional<DurDay> IcalParser::dur_day() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurDay ret;
 
         if (auto v = digits(1, -1)) ret.value += *v;
@@ -2145,7 +2146,7 @@ optional<DurDay> IcalParser::dur_day() {
 //       dur-time   = "T" (dur-hour / dur-minute / dur-second)
 optional<DurTime> IcalParser::dur_time() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurTime ret;
 
         if (!token("T")) return nullopt;
@@ -2169,7 +2170,7 @@ optional<DurTime> IcalParser::dur_time() {
 //       dur-date   = dur-day [dur-time]
 optional<DurDate> IcalParser::dur_date() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurDate ret;
 
         if (auto v = dur_day()) ret.day = *v;
@@ -2184,7 +2185,7 @@ optional<DurDate> IcalParser::dur_date() {
 //       dur-value  = (["+"] / "-") "P" (dur-date / dur-time / dur-week)
 optional<DurValue> IcalParser::dur_value() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DurValue ret;
 
         if(token("+")) ret.positive = true;
@@ -2213,7 +2214,7 @@ optional<DurValue> IcalParser::dur_value() {
 //       ; of time.
 bool IcalParser::period_start() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 date_time() &&
                 token("/") &&
@@ -2227,7 +2228,7 @@ bool IcalParser::period_start() {
 //       period-explicit = date-time "/" date-time
 bool IcalParser::period_explicit() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 date_time() &&
                 token("/") &&
@@ -2244,7 +2245,7 @@ bool IcalParser::period_explicit() {
 //       period     = period-explicit / period-start
 bool IcalParser::period() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 period_explicit() ||
                 period_start() ;
@@ -2265,7 +2266,7 @@ optional<OtherParam> IcalParser::other_param() {
 // stmparam   = *(";" other-param)
 optional<DtStampParams> IcalParser::stmparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtStampParams ret;
 
         while (token(";")) {
@@ -2282,7 +2283,7 @@ optional<DtStampParams> IcalParser::stmparam() {
 // dtstamp    = "DTSTAMP" stmparam ":" date-time CRLF
 optional<DtStamp> IcalParser::dtstamp() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtStamp ret;
 
         if (!token("DTSTAMP")) return nullopt;
@@ -2303,7 +2304,7 @@ optional<DtStamp> IcalParser::dtstamp() {
 //       uidparam   = *(";" other-param)
 optional<vector<OtherParam>> IcalParser::uidparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         vector<OtherParam> ret;
         while (token(";")) {
                 if (auto v = other_param()) {
@@ -2318,7 +2319,7 @@ optional<vector<OtherParam>> IcalParser::uidparam() {
 //       uid        = "UID" uidparam ":" text CRLF
 optional<Uid> IcalParser::uid() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Uid ret;
 
         if (!token("UID")) return nullopt;
@@ -2360,7 +2361,7 @@ optional<DtStartVal> IcalParser::dtstval() {
 //                  )
 optional<DtStartParams> IcalParser::dtstparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtStartParams ret;
 
         while (token(";")) {
@@ -2390,7 +2391,7 @@ optional<DtStartParams> IcalParser::dtstparam() {
 //
 optional<DtStart> IcalParser::dtstart() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtStart ret;
 
         if (!token("DTSTART")) return nullopt;
@@ -2425,7 +2426,7 @@ optional<string> IcalParser::classvalue() {
 //       classparam = *(";" other-param)
 optional<ClassParams> IcalParser::classparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ClassParams ret;
 
         while (token(";")) {
@@ -2439,7 +2440,7 @@ optional<ClassParams> IcalParser::classparam() {
 //       class      = "CLASS" classparam ":" classvalue CRLF
 optional<Class> IcalParser::class_() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Class ret;
 
         if (!token("CLASS")) return nullopt;
@@ -2460,7 +2461,7 @@ optional<Class> IcalParser::class_() {
 //       creaparam  = *(";" other-param)
 optional<CreaParam> IcalParser::creaparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         CreaParam ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -2472,7 +2473,7 @@ optional<CreaParam> IcalParser::creaparam() {
 //       created    = "CREATED" creaparam ":" date-time CRLF
 optional<Created> IcalParser::created() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Created ret;
 
         if (!token("CREATED")) return nullopt;
@@ -2506,7 +2507,7 @@ optional<Created> IcalParser::created() {
 //                   )
 optional<DescParams> IcalParser::descparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DescParams ret;
         while(token(";")) {
                 if (auto v = altrepparam()) {
@@ -2526,7 +2527,7 @@ optional<DescParams> IcalParser::descparam() {
 //       description = "DESCRIPTION" descparam ":" text CRLF
 optional<Description> IcalParser::description() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Description ret;
 
         if (!token("DESCRIPTION")) return nullopt;
@@ -2549,7 +2550,7 @@ optional<Description> IcalParser::description() {
 //       ;Latitude and Longitude components
 optional<GeoValue> IcalParser::geovalue() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         GeoValue ret;
         if (auto v = float_()) ret.latitude = *v;
         else return nullopt;
@@ -2565,7 +2566,7 @@ optional<GeoValue> IcalParser::geovalue() {
 //       geoparam   = *(";" other-param)
 optional<GeoParams> IcalParser::geoparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         GeoParams ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -2577,7 +2578,7 @@ optional<GeoParams> IcalParser::geoparam() {
 //       geo        = "GEO" geoparam ":" geovalue CRLF
 optional<Geo> IcalParser::geo() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Geo ret;
 
         if (!token("GEO")) return nullopt;
@@ -2598,7 +2599,7 @@ optional<Geo> IcalParser::geo() {
 //       lstparam   = *(";" other-param)
 optional<LstParams> IcalParser::lstparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         LstParams ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -2610,7 +2611,7 @@ optional<LstParams> IcalParser::lstparam() {
 //       last-mod   = "LAST-MODIFIED" lstparam ":" date-time CRLF
 optional<LastMod> IcalParser::last_mod() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         LastMod ret;
 
         if (!token("LAST-MODIFIED")) return nullopt;
@@ -2645,7 +2646,7 @@ optional<LastMod> IcalParser::last_mod() {
 //                  )
 optional<LocParams> IcalParser::locparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         LocParams ret;
         while(token(";")) {
                 if (auto v = altrepparam()) {
@@ -2665,7 +2666,7 @@ optional<LocParams> IcalParser::locparam() {
 //       location   = "LOCATION"  locparam ":" text CRLF
 optional<Location> IcalParser::location() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Location ret;
         if (!token("LOCATION"))
                 return nullopt;
@@ -2702,7 +2703,7 @@ optional<Location> IcalParser::location() {
 //                  )
 optional<OrgParams> IcalParser::orgparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         OrgParams ret;
         while(token(";")) {
                 if (auto v = cnparam()) {
@@ -2731,7 +2732,7 @@ optional<Uri> IcalParser::cal_address() {
 //       organizer  = "ORGANIZER" orgparam ":" cal-address CRLF
 optional<Organizer> IcalParser::organizer() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Organizer ret;
 
         if (!token("ORGANIZER"))
@@ -2764,7 +2765,7 @@ optional<Organizer> IcalParser::organizer() {
 bool IcalParser::priovalue() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
@@ -2772,7 +2773,7 @@ bool IcalParser::priovalue() {
 bool IcalParser::prioparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
@@ -2780,7 +2781,7 @@ bool IcalParser::prioparam() {
 //       ;Default is zero (i.e., undefined).
 optional<Priority> IcalParser::priority() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("PRIORITY") &&
                 prioparam() &&
@@ -2795,7 +2796,7 @@ optional<Priority> IcalParser::priority() {
 //       seqparam   = *(";" other-param)
 optional<SeqParams> IcalParser::seqparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         SeqParams ret;
         while (auto v = other_param())
                 ret.params.push_back(*v);
@@ -2805,7 +2806,7 @@ optional<SeqParams> IcalParser::seqparam() {
 //       seq = "SEQUENCE" seqparam ":" integer CRLF     ; Default is "0"
 optional<Seq> IcalParser::seq() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Seq ret;
 
         if (!token("SEQUENCE")) return nullopt;
@@ -2831,7 +2832,7 @@ optional<Seq> IcalParser::seq() {
 //       ;Status values for a "VEVENT"
 optional<StatvalueEvent> IcalParser::statvalue_event() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         StatvalueEvent ret;
 
         if (auto v = token("TENTATIVE")) ret.value = *v;
@@ -2850,7 +2851,7 @@ optional<StatvalueEvent> IcalParser::statvalue_event() {
 //       ;Status values for "VTODO".
 optional<StatvalueTodo> IcalParser::statvalue_todo() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         StatvalueTodo ret;
 
         if (auto v = token("NEEDS-ACTION")) ret.value = *v;
@@ -2869,7 +2870,7 @@ optional<StatvalueTodo> IcalParser::statvalue_todo() {
 //      ;Status values for "VJOURNAL".
 optional<StatvalueJour> IcalParser::statvalue_jour() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         StatvalueJour ret;
 
         if (auto v = token("DRAFT")) ret.value = *v;
@@ -2886,7 +2887,7 @@ optional<StatvalueJour> IcalParser::statvalue_jour() {
 //                       /  statvalue-jour)
 optional<Statvalue> IcalParser::statvalue() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Statvalue ret;
 
         if (auto v = statvalue_event()) ret = *v;
@@ -2901,7 +2902,7 @@ optional<Statvalue> IcalParser::statvalue() {
 //       statparam       = *(";" other-param)
 optional<StatParams> IcalParser::statparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         StatParams ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -2914,7 +2915,7 @@ optional<StatParams> IcalParser::statparam() {
 //       status          = "STATUS" statparam ":" statvalue CRLF
 optional<Status> IcalParser::status() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Status ret;
 
         if (!token("STATUS")) return nullopt;
@@ -2949,7 +2950,7 @@ optional<Status> IcalParser::status() {
 //                  )
 optional<SummParams> IcalParser::summparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         SummParams ret;
         while(token(";")) {
                 if (auto v = altrepparam()) {
@@ -2970,7 +2971,7 @@ optional<SummParams> IcalParser::summparam() {
 //       summary    = "SUMMARY" summparam ":" text CRLF
 optional<Summary> IcalParser::summary() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Summary ret;
 
         if (!token("SUMMARY"))  return nullopt;
@@ -2992,7 +2993,7 @@ optional<Summary> IcalParser::summary() {
 //       transparam = *(";" other-param)
 bool IcalParser::transparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (token(";")) {
                 if (!other_param())
                         return false;
@@ -3008,7 +3009,7 @@ bool IcalParser::transparam() {
 //       ;Default value is OPAQUE
 bool IcalParser::transvalue() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("OPAQUE") ||
                 token("TRANSPARENT");
@@ -3021,7 +3022,7 @@ bool IcalParser::transvalue() {
 //       transp     = "TRANSP" transparam ":" transvalue CRLF
 optional<Transp> IcalParser::transp() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("TRANSP") &&
                 transparam() &&
@@ -3036,8 +3037,8 @@ optional<Transp> IcalParser::transp() {
 //      uri = <As defined in Section 3 of [RFC3986]>
 optional<Uri> IcalParser::uri() {
         CALLSTACK;
-        save_input_pos ptran(is);
-        const auto uri = rfc3986::read_URI(is);
+        save_input_pos ptran(*is);
+        const auto uri = rfc3986::read_URI(*is);
         if (!uri)
                 return nullopt;
         ptran.commit();
@@ -3047,14 +3048,14 @@ optional<Uri> IcalParser::uri() {
 bool IcalParser::urlparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
 //       url        = "URL" urlparam ":" uri CRLF
 optional<Url> IcalParser::url() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("URL") &&
                 urlparam() &&
@@ -3070,7 +3071,7 @@ optional<Url> IcalParser::url() {
 //       ;Value MUST match value type
 bool IcalParser::ridval() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success = date_time() || date();
         if (!success)
                 return false;
@@ -3097,7 +3098,7 @@ bool IcalParser::ridparam_single() {
         CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE"))
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto success =
                         token(";") &&
                         token("VALUE") &&
@@ -3110,7 +3111,7 @@ bool IcalParser::ridparam_single() {
         }
         // (";" tzidparam) / (";" rangeparam)
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto success =
                         token(";") &&
                         (tzidparam() || rangeparam());
@@ -3121,7 +3122,7 @@ bool IcalParser::ridparam_single() {
         }
         // (";" other-param)
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto success =
                         token(";") &&
                         other_param();
@@ -3134,7 +3135,7 @@ bool IcalParser::ridparam_single() {
 }
 bool IcalParser::ridparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (ridparam_single()) {
         }
         ptran.commit();
@@ -3144,7 +3145,7 @@ bool IcalParser::ridparam() {
 //       setposday   = yeardaynum
 optional<SetPosDay> IcalParser::setposday() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         SetPosDay ret;
 
         if (auto v = yeardaynum()) ret = *v;
@@ -3157,7 +3158,7 @@ optional<SetPosDay> IcalParser::setposday() {
 //       bysplist    = ( setposday *("," setposday) )
 optional<BySpList> IcalParser::bysplist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         BySpList ret;
 
         do {
@@ -3174,7 +3175,7 @@ optional<BySpList> IcalParser::bysplist() {
 //       monthnum    = 1*2DIGIT       ;1 to 12
 optional<MonthNum> IcalParser::monthnum() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         MonthNum ret;
 
         if (auto v = digits(1,2)) ret = *v;
@@ -3187,7 +3188,7 @@ optional<MonthNum> IcalParser::monthnum() {
 //       bymolist    = ( monthnum *("," monthnum) )
 optional<ByMoList> IcalParser::bymolist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByMoList ret;
 
         do {
@@ -3210,7 +3211,7 @@ optional<Weeknum> IcalParser::weeknum() {
 //       bywknolist  = ( weeknum *("," weeknum) )
 optional<ByWkNoList> IcalParser::bywknolist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByWkNoList ret;
 
         do {
@@ -3227,7 +3228,7 @@ optional<ByWkNoList> IcalParser::bywknolist() {
 //       ordyrday    = 1*3DIGIT      ;1 to 366
 optional<OrdYrDay> IcalParser::ordyrday() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         OrdYrDay ret;
 
         if (auto v = digits(1,3)) ret = *v;
@@ -3240,7 +3241,7 @@ optional<OrdYrDay> IcalParser::ordyrday() {
 //       yeardaynum  = [plus / minus] ordyrday
 optional<YearDayNum> IcalParser::yeardaynum() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         YearDayNum ret;
 
         if (auto v = plus()) ret.sign = +1;
@@ -3257,7 +3258,7 @@ optional<YearDayNum> IcalParser::yeardaynum() {
 //       byyrdaylist = ( yeardaynum *("," yeardaynum) )
 optional<ByYrDayList> IcalParser::byyrdaylist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByYrDayList ret;
 
         do {
@@ -3274,7 +3275,7 @@ optional<ByYrDayList> IcalParser::byyrdaylist() {
 //       ordmoday    = 1*2DIGIT       ;1 to 31
 optional<OrdMoDay> IcalParser::ordmoday() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         OrdMoDay ret;
 
         if (auto v = digits(1,2)) ret = *v;
@@ -3287,7 +3288,7 @@ optional<OrdMoDay> IcalParser::ordmoday() {
 //       monthdaynum = [plus / minus] ordmoday
 optional<MonthDayNum> IcalParser::monthdaynum() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         MonthDayNum ret;
 
         if (auto v = plus()) ret.sign = +1;
@@ -3304,7 +3305,7 @@ optional<MonthDayNum> IcalParser::monthdaynum() {
 //       bymodaylist = ( monthdaynum *("," monthdaynum) )
 optional<ByMoDayList> IcalParser::bymodaylist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByMoDayList ret;
 
         do {
@@ -3323,7 +3324,7 @@ optional<ByMoDayList> IcalParser::bymodaylist() {
 //       ;FRIDAY, and SATURDAY days of the week.
 optional<WeekDay> IcalParser::weekday() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         WeekDay ret;
 
         if (token("SU")) ret = WeekDay::Sunday;
@@ -3342,7 +3343,7 @@ optional<WeekDay> IcalParser::weekday() {
 //       ordwk       = 1*2DIGIT       ;1 to 53
 optional<OrdWk> IcalParser::ordwk() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         OrdWk ret;
         if (auto v = digits(1,2)) ret = *v;
         else return nullopt;
@@ -3353,7 +3354,7 @@ optional<OrdWk> IcalParser::ordwk() {
 //       minus       = "-"
 bool IcalParser::minus() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!token("-")) return false;
         ptran.commit();
         return true;
@@ -3362,7 +3363,7 @@ bool IcalParser::minus() {
 //       plus        = "+"
 bool IcalParser::plus() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!token("+")) return false;
         ptran.commit();
         return true;
@@ -3371,7 +3372,7 @@ bool IcalParser::plus() {
 //       weekdaynum  = [[plus / minus] ordwk] weekday
 optional<WeekDayNum> IcalParser::weekdaynum() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         WeekDayNum ret;
 
         const int sign = plus() ? +1 : minus() ? -1 : 0;
@@ -3399,7 +3400,7 @@ optional<WeekDayNum> IcalParser::weekdaynum() {
 //       bywdaylist  = ( weekdaynum *("," weekdaynum) )
 optional<ByWDayList> IcalParser::bywdaylist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByWDayList ret;
 
         do {
@@ -3416,7 +3417,7 @@ optional<ByWDayList> IcalParser::bywdaylist() {
 //       seconds     = 1*2DIGIT       ;0 to 60
 optional<Seconds> IcalParser::seconds() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Seconds ret;
 
         if (auto v = digits(1,2)) ret = *v;
@@ -3429,7 +3430,7 @@ optional<Seconds> IcalParser::seconds() {
 //       hour        = 1*2DIGIT       ;0 to 23
 optional<Hour> IcalParser::hour() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Hour ret;
 
         if (auto v = digits(1,2)) ret = *v;
@@ -3442,7 +3443,7 @@ optional<Hour> IcalParser::hour() {
 //       minutes     = 1*2DIGIT       ;0 to 59
 optional<Minutes> IcalParser::minutes() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Hour ret;
 
         if (auto v = digits(1,2)) ret = *v;
@@ -3455,7 +3456,7 @@ optional<Minutes> IcalParser::minutes() {
 //       byhrlist    = ( hour *("," hour) )
 optional<ByHrList> IcalParser::byhrlist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByHrList ret;
 
         do {
@@ -3472,7 +3473,7 @@ optional<ByHrList> IcalParser::byhrlist() {
 //       byminlist   = ( minutes *("," minutes) )
 optional<ByMinList> IcalParser::byminlist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ByMinList ret;
 
         do {
@@ -3489,7 +3490,7 @@ optional<ByMinList> IcalParser::byminlist() {
 //       byseclist   = ( seconds *("," seconds) )
 optional<BySecList> IcalParser::byseclist() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         BySecList ret;
 
         do {
@@ -3506,7 +3507,7 @@ optional<BySecList> IcalParser::byseclist() {
 //       enddate     = date / date-time
 optional<EndDate> IcalParser::enddate() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         EndDate ret;
 
         if (auto v = date()) ret = *v;
@@ -3521,7 +3522,7 @@ optional<EndDate> IcalParser::enddate() {
 //                   / "WEEKLY" / "MONTHLY" / "YEARLY"
 optional<Freq> IcalParser::freq() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Freq ret;
 
         if (token("SECONDLY")) ret = Freq::Secondly;
@@ -3567,7 +3568,7 @@ optional<Freq> IcalParser::freq() {
 //                       ; but MUST NOT occur more than once.
 optional<Recur> IcalParser::recur() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Recur ret;
 
         do {
@@ -3639,7 +3640,7 @@ optional<Recur> IcalParser::recur() {
 //       recurid    = "RECURRENCE-ID" ridparam ":" ridval CRLF
 optional<RecurId> IcalParser::recurid() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("RECURRENCE-ID") &&
                 ridparam() &&
@@ -3654,7 +3655,7 @@ optional<RecurId> IcalParser::recurid() {
 //       rrulparam  = *(";" other-param)
 optional<RRulParam> IcalParser::rrulparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RRulParam ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.otherParams.push_back(*v);
@@ -3667,7 +3668,7 @@ optional<RRulParam> IcalParser::rrulparam() {
 //       rrule      = "RRULE" rrulparam ":" recur CRLF
 optional<RRule> IcalParser::rrule() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RRule ret;
 
         if (!token("RRULE")) return nullopt;
@@ -3711,7 +3712,7 @@ optional<DtEndVal> IcalParser::dtendval() {
 //           )
 optional<DtEndParams> IcalParser::dtendparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtEndParams ret;
 
         while (token(";")) {
@@ -3741,7 +3742,7 @@ optional<DtEndParams> IcalParser::dtendparam() {
 //       dtend      = "DTEND" dtendparam ":" dtendval CRLF
 optional<DtEnd> IcalParser::dtend() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DtEnd ret;
 
         if (!token("DTEND")) return nullopt;
@@ -3764,7 +3765,7 @@ optional<DtEnd> IcalParser::dtend() {
 bool IcalParser::durparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 false;
         if (!success)
@@ -3777,7 +3778,7 @@ bool IcalParser::durparam() {
 //                    ;consisting of a positive duration of time.
 optional<Duration> IcalParser::duration() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("DURATION") &&
                 durparam() &&
@@ -3806,7 +3807,7 @@ optional<Duration> IcalParser::duration() {
 //                   )
 bool IcalParser::attachparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token(";") &&
                 (fmttypeparam() || other_param());
@@ -3828,7 +3829,7 @@ bool IcalParser::attachparam() {
 //                    CRLF
 optional<Attach> IcalParser::attach() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
 
         const auto match_head =
                 token("ATTACH") && attachparam();
@@ -3837,7 +3838,7 @@ optional<Attach> IcalParser::attach() {
 
         // ":" uri
         {
-                save_input_pos ptran_uri(is);
+                save_input_pos ptran_uri(*is);
                 const auto match_uri =
                         token(":") &&
                         uri() &&
@@ -3851,7 +3852,7 @@ optional<Attach> IcalParser::attach() {
 
         // ";" "ENCODING" "=" "BASE64" ";" "VALUE" "=" "BINARY" ":" binary
         {
-                save_input_pos ptran_enc(is);
+                save_input_pos ptran_enc(*is);
                 const auto match_enc =
                         token(";") &&
                         token("ENCODING") &&
@@ -3894,14 +3895,14 @@ optional<Attach> IcalParser::attach() {
 bool IcalParser::attparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
 //       attendee   = "ATTENDEE" attparam ":" cal-address CRLF
 optional<Attendee> IcalParser::attendee() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 token("ATTENDEE") &&
                 attparam() &&
@@ -3928,7 +3929,7 @@ optional<Attendee> IcalParser::attendee() {
 //                  )
 optional<CatParams> IcalParser::catparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         CatParams ret;
         while (token(";")) {
                 if (auto v = languageparam()) {
@@ -3946,7 +3947,7 @@ optional<CatParams> IcalParser::catparam() {
 //                    CRLF
 optional<Categories> IcalParser::categories () {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Categories ret;
 
         if (!token("CATEGORIES")) return nullopt;
@@ -3985,7 +3986,7 @@ optional<Categories> IcalParser::categories () {
 //                  )
 bool IcalParser::commparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (token(";")) {
                 const auto match =
                         altrepparam() ||
@@ -4000,7 +4001,7 @@ bool IcalParser::commparam() {
 //       comment    = "COMMENT" commparam ":" text CRLF
 optional<Comment> IcalParser::comment() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 token("COMMENT") &&
                 commparam() &&
@@ -4028,7 +4029,7 @@ optional<Comment> IcalParser::comment() {
 //                  )
 bool IcalParser::contparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (token(";")) {
                 const auto match =
                         altrepparam() ||
@@ -4043,7 +4044,7 @@ bool IcalParser::contparam() {
 //       contact    = "CONTACT" contparam ":" text CRLF
 optional<Contact> IcalParser::contact() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 token("CONTACT") &&
                 contparam() &&
@@ -4060,7 +4061,7 @@ optional<Contact> IcalParser::contact() {
 bool IcalParser::exdtval() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
@@ -4082,14 +4083,14 @@ bool IcalParser::exdtval() {
 bool IcalParser::exdtparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
 //       exdate     = "EXDATE" exdtparam ":" exdtval *("," exdtval) CRLF
 optional<ExDate> IcalParser::exdate() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto match =
                 token("EXDATE") &&
                 exdtparam() &&
@@ -4112,7 +4113,7 @@ optional<ExDate> IcalParser::exdate() {
 //       ;name and value or complete property line.
 bool IcalParser::extdata() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!text())
                 return false;
         ptran.commit();
@@ -4123,7 +4124,7 @@ bool IcalParser::extdata() {
 //       ;Textual status description
 bool IcalParser::statdesc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!text())
                 return false;
         ptran.commit();
@@ -4135,7 +4136,7 @@ bool IcalParser::statdesc() {
 bool IcalParser::statcode() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
@@ -4155,7 +4156,7 @@ bool IcalParser::statcode() {
 //                  )
 bool IcalParser::rstatparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (token(";")) {
                 const auto match =
                         languageparam() ||
@@ -4171,7 +4172,7 @@ bool IcalParser::rstatparam() {
 //                    statcode ";" statdesc [";" extdata]
 optional<RStatus> IcalParser::rstatus() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("REQUEST-STATUS") &&
                 rstatparam() &&
@@ -4195,7 +4196,7 @@ optional<RStatus> IcalParser::rstatus() {
 //                                        ; relationship type
 optional<RelTypeParam> IcalParser::reltypeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RelTypeParam ret;
 
         if (!token("RELTYPE")) return nullopt;
@@ -4234,7 +4235,7 @@ optional<RelTypeParam> IcalParser::reltypeparam() {
 //                  )
 bool IcalParser::relparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (token(";")) {
                 const auto match =
                         reltypeparam() ||
@@ -4248,7 +4249,7 @@ bool IcalParser::relparam() {
 //       related    = "RELATED-TO" relparam ":" text CRLF
 optional<Related> IcalParser::related() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("RELATED-TO") &&
                 relparam() &&
@@ -4277,14 +4278,14 @@ optional<Related> IcalParser::related() {
 bool IcalParser::resrcparam() {
         CALLSTACK;
         NOT_IMPLEMENTED;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ptran.commit();
         return true;
 }
 //       resources  = "RESOURCES" resrcparam ":" text *("," text) CRLF
 optional<Resources> IcalParser::resources() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("RESOURCES") &&
                 resrcparam() &&
@@ -4325,7 +4326,7 @@ bool IcalParser::rdtparam_single() {
         CALLSTACK;
         // (";" "VALUE" "=" ("DATE-TIME" / "DATE" / "PERIOD"))
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto match =
                         token(";") &&
                         token("VALUE") &&
@@ -4342,7 +4343,7 @@ bool IcalParser::rdtparam_single() {
         }
         // (";" tzidparam)
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto match =
                         token(";") &&
                         tzidparam();
@@ -4353,7 +4354,7 @@ bool IcalParser::rdtparam_single() {
         }
         // (";" other-param)
         {
-                save_input_pos ptran(is);
+                save_input_pos ptran(*is);
                 const auto match =
                         token(";") &&
                         other_param();
@@ -4366,7 +4367,7 @@ bool IcalParser::rdtparam_single() {
 }
 bool IcalParser::rdtparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         while (rdtparam_single()) {
         }
         ptran.commit();
@@ -4375,7 +4376,7 @@ bool IcalParser::rdtparam() {
 //       rdate      = "RDATE" rdtparam ":" rdtval *("," rdtval) CRLF
 optional<RDate> IcalParser::rdate() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 token("RDATE") &&
                 rdtparam() &&
@@ -4455,7 +4456,7 @@ optional<RDate> IcalParser::rdate() {
 //               )
 optional<EventProp> IcalParser::eventprop_single() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         EventProp ret;
         if (auto v = dtstamp()) ret = *v;
         else if (auto v = uid()) ret = *v;
@@ -4502,7 +4503,7 @@ optional<EventProp> IcalParser::eventprop_single() {
 }
 optional<vector<EventProp>> IcalParser::eventprop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         vector<EventProp> ret;
         while (auto v = eventprop_single()) {
                 ret.push_back(*v);
@@ -4517,7 +4518,7 @@ optional<vector<EventProp>> IcalParser::eventprop() {
 //                    "END" ":" "VEVENT" CRLF
 optional<EventComp> IcalParser::eventc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         EventComp ret;
 
         if (!key_value_newline("BEGIN", "VEVENT")) return nullopt;
@@ -4583,7 +4584,7 @@ bool IcalParser::todoprop() {
 //                    "END" ":" "VTODO" CRLF
 optional<TodoComp> IcalParser::todoc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success_pro =
                 key_value_newline("BEGIN", "VTODO") &&
                 todoprop();
@@ -4640,7 +4641,7 @@ bool IcalParser::jourprop() {
 //                    "END" ":" "VJOURNAL" CRLF
 optional<JournalComp> IcalParser::journalc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 key_value_newline("BEGIN", "VJOURNAL") &&
                 jourprop() &&
@@ -4682,7 +4683,7 @@ bool IcalParser::fbprop() {
 //                    "END" ":" "VFREEBUSY" CRLF
 optional<FreeBusyComp> IcalParser::freebusyc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success =
                 key_value_newline("BEGIN", "VFREEBUSY") &&
                 fbprop() &&
@@ -4697,7 +4698,7 @@ optional<FreeBusyComp> IcalParser::freebusyc() {
 //       tzidpropparam      = *(";" other-param)
 optional<TzIdPropParam> IcalParser::tzidpropparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzIdPropParam ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -4710,7 +4711,7 @@ optional<TzIdPropParam> IcalParser::tzidpropparam() {
 //       tzid       = "TZID" tzidpropparam ":" [tzidprefix] text CRLF
 optional<TzId> IcalParser::tzid() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzId ret;
 
         if (!token("TZID")) return nullopt;
@@ -4734,7 +4735,7 @@ optional<TzId> IcalParser::tzid() {
 //       tzurlparam = *(";" other-param)
 optional<TzUrlParam> IcalParser::tzurlparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzUrlParam ret;
         while (token(";")) {
                 if (auto v = other_param()) ret.params.push_back(*v);
@@ -4747,7 +4748,7 @@ optional<TzUrlParam> IcalParser::tzurlparam() {
 //       tzurl      = "TZURL" tzurlparam ":" uri CRLF
 optional<TzUrl> IcalParser::tzurl() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzUrl ret;
 
         if (!token("TZURL")) return nullopt;
@@ -4769,7 +4770,7 @@ optional<TzUrl> IcalParser::tzurl() {
 //       frmparam   = *(";" other-param)
 optional<FrmParam> IcalParser::frmparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         FrmParam ret;
 
         while (token(";")) {
@@ -4784,7 +4785,7 @@ optional<FrmParam> IcalParser::frmparam() {
 //       toparam    = *(";" other-param)
 optional<ToParam> IcalParser::toparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ToParam ret;
 
         while (token(";")) {
@@ -4799,7 +4800,7 @@ optional<ToParam> IcalParser::toparam() {
 //       time-numzone = ("+" / "-") time-hour time-minute [time-second]
 optional<TimeNumZone> IcalParser::time_numzone() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TimeNumZone ret;
 
         if (token("+")) ret.sign = +1;
@@ -4821,7 +4822,7 @@ optional<TimeNumZone> IcalParser::time_numzone() {
 //       utc-offset = time-numzone
 optional<UtcOffset> IcalParser::utc_offset() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         UtcOffset ret;
 
         if (auto v = time_numzone()) ret.numZone = *v;
@@ -4834,7 +4835,7 @@ optional<UtcOffset> IcalParser::utc_offset() {
 //       tzoffsetto = "TZOFFSETTO" toparam ":" utc-offset CRLF
 optional<TzOffsetTo> IcalParser::tzoffsetto() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzOffsetTo ret;
 
         if (!token("TZOFFSETTO")) return nullopt;
@@ -4856,7 +4857,7 @@ optional<TzOffsetTo> IcalParser::tzoffsetto() {
 //       tzoffsetfrom       = "TZOFFSETFROM" frmparam ":" utc-offset CRLF
 optional<TzOffsetFrom> IcalParser::tzoffsetfrom() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzOffsetFrom ret;
 
         if (!token("TZOFFSETFROM")) return nullopt;
@@ -4890,7 +4891,7 @@ optional<TzOffsetFrom> IcalParser::tzoffsetfrom() {
 //                  )
 optional<TzNParam> IcalParser::tznparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzNParam ret;
 
         while (true) {
@@ -4906,7 +4907,7 @@ optional<TzNParam> IcalParser::tznparam() {
 //       tzname     = "TZNAME" tznparam ":" text CRLF
 optional<TzName> IcalParser::tzname() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzName ret;
 
         if (!token("TZNAME")) return nullopt;
@@ -4945,7 +4946,7 @@ optional<TzName> IcalParser::tzname() {
 //                    )
 optional<TzProp> IcalParser::tzprop() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzProp ret;
 
         while (true) {
@@ -4970,7 +4971,7 @@ optional<TzProp> IcalParser::tzprop() {
 //                    "END" ":" "DAYLIGHT" CRLF
 optional<DaylightC> IcalParser::daylightc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DaylightC ret;
 
         if (!key_value_newline("BEGIN", "DAYLIGHT")) return nullopt;
@@ -4989,7 +4990,7 @@ optional<DaylightC> IcalParser::daylightc() {
 //                    "END" ":" "STANDARD" CRLF
 optional<StandardC> IcalParser::standardc() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         StandardC ret;
 
         if (!key_value_newline("BEGIN", "STANDARD")) return nullopt;
@@ -5030,7 +5031,7 @@ optional<StandardC> IcalParser::standardc() {
 //                    "END" ":" "VTIMEZONE" CRLF
 optional<TimezoneComp> IcalParser::timezonec() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TimezoneComp ret;
 
         if (!key_value_newline("BEGIN", "VTIMEZONE")) return nullopt;
@@ -5059,7 +5060,7 @@ optional<TimezoneComp> IcalParser::timezonec() {
 //                    "END" ":" iana-token CRLF
 optional<IanaComp> IcalParser::iana_comp() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success_pro =
                 token("BEGIN") &&
                 token(":") &&
@@ -5091,7 +5092,7 @@ optional<IanaComp> IcalParser::iana_comp() {
 //                    "END" ":" x-name CRLF
 optional<XComp> IcalParser::x_comp() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         const auto success_pro =
                 token("BEGIN") &&
                 token(":") &&
@@ -5123,7 +5124,7 @@ optional<XComp> IcalParser::x_comp() {
 //
 optional<Component> IcalParser::component_single() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         Component ret;
         if (auto v = eventc()) ret = *v;
         else if (auto v = todoc()) ret = *v;
@@ -5144,7 +5145,7 @@ Component IcalParser::expect_component_single() {
 }
 vector<Component> IcalParser::expect_component() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         vector<Component> ret;
         ret.push_back(expect_component_single());
         while(auto v = component_single()) {
@@ -5157,7 +5158,7 @@ vector<Component> IcalParser::expect_component() {
 // altrepparam = "ALTREP" "=" DQUOTE uri DQUOTE
 optional<AltRepParam> IcalParser::altrepparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!token("ALTREP")) return nullopt;
         if (!token("=")) return nullopt;
         const auto v = quoted_string();
@@ -5169,7 +5170,7 @@ optional<AltRepParam> IcalParser::altrepparam() {
 // cnparam    = "CN" "=" param-value
 optional<CnParam> IcalParser::cnparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!token("CN")) return nullopt;
         if (!token("=")) return nullopt;
         const auto v = param_value();
@@ -5190,7 +5191,7 @@ optional<CnParam> IcalParser::cnparam() {
 //       ; Default is INDIVIDUAL
 optional<CuTypeParam> IcalParser::cutypeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         if (!token("CUTYPE")) return nullopt;
         if (!token("=")) return nullopt;
 
@@ -5212,7 +5213,7 @@ optional<CuTypeParam> IcalParser::cutypeparam() {
 //                           *("," DQUOTE cal-address DQUOTE)
 optional<DelFromParam> IcalParser::delfromparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DelFromParam ret;
 
         if (!token("DELEGATED-FROM")) return nullopt;
@@ -5238,7 +5239,7 @@ optional<DelFromParam> IcalParser::delfromparam() {
 //                    *("," DQUOTE cal-address DQUOTE)
 optional<DelToParam> IcalParser::deltoparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DelToParam ret;
 
         if (!token("DELEGATED-TO")) return nullopt;
@@ -5263,7 +5264,7 @@ optional<DelToParam> IcalParser::deltoparam() {
 //      dirparam   = "DIR" "=" DQUOTE uri DQUOTE
 optional<DirParam> IcalParser::dirparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         DirParam ret;
 
         if (!token("DIR")) return nullopt;
@@ -5285,7 +5286,7 @@ optional<DirParam> IcalParser::dirparam() {
 //          )
 optional<EncodingParam> IcalParser::encodingparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         EncodingParam ret;
         if (!token("ENCODING")) return nullopt;
         if (!token("=")) return nullopt;
@@ -5306,15 +5307,15 @@ optional<EncodingParam> IcalParser::encodingparam() {
 //                      ; defined in Section 4.2 of [RFC4288].
 optional<FmtTypeParam> IcalParser::fmttypeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         FmtTypeParam ret;
 
         if (!token("FMTTYPE")) return nullopt;
         if (!token("=")) return nullopt;
 
-        if (auto v = read_type_name(is)) {
+        if (auto v = read_type_name(*is)) {
                 ret.value = *v;
-        } else if (auto v = read_subtype_name(is)) {
+        } else if (auto v = read_subtype_name(*is)) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -5335,7 +5336,7 @@ optional<FmtTypeParam> IcalParser::fmttypeparam() {
 //                ; Some other IANA-registered iCalendar free/busy type.
 optional<FbTypeParam> IcalParser::fbtypeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         FbTypeParam ret;
         if (!token("FBTYPE")) return nullopt;
         if (!token("=")) return nullopt;
@@ -5365,12 +5366,12 @@ optional<FbTypeParam> IcalParser::fbtypeparam() {
 //                  ; As defined in [RFC5646].
 optional<LanguageParam> IcalParser::languageparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         LanguageParam ret;
         if (!token("LANGUAGE")) return nullopt;
         if (!token("=")) return nullopt;
 
-        if (auto v = read_language_tag(is)) {
+        if (auto v = read_language_tag(*is)) {
                 ret.value = *v;
         } else {
                 return nullopt;
@@ -5383,7 +5384,7 @@ optional<LanguageParam> IcalParser::languageparam() {
 //                            *("," DQUOTE cal-address DQUOTE)
 optional<MemberParam> IcalParser::memberparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         MemberParam ret;
 
         if (!token("MEMBER")) return nullopt;
@@ -5463,7 +5464,7 @@ optional<PartStatEvent> IcalParser::partstat_event() {
 //                        / partstat-jour)
 optional<PartStatParam> IcalParser::partstatparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         PartStatParam ret;
 
         if (!token("PARTSTAT")) return optional<PartStatParam>();
@@ -5487,7 +5488,7 @@ optional<PartStatParam> IcalParser::partstatparam() {
 //       ; and all subsequent recurrence instances.
 optional<RangeParam> IcalParser::rangeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RangeParam ret;
 
         if (!token("RANGE")) return nullopt;
@@ -5508,7 +5509,7 @@ optional<RangeParam> IcalParser::rangeparam() {
 //                          / "END")        ; Trigger off of end
 optional<TrigRelParam> IcalParser::trigrelparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TrigRelParam ret;
 
         if (!token("RELATED")) return nullopt;
@@ -5540,7 +5541,7 @@ optional<TrigRelParam> IcalParser::trigrelparam() {
 //       ; Default is REQ-PARTICIPANT
 optional<RoleParam> IcalParser::roleparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RoleParam ret;
 
         if (!token("ROLE")) return nullopt;
@@ -5569,7 +5570,7 @@ optional<RoleParam> IcalParser::roleparam() {
 //       ; Default is FALSE
 optional<RsvpParam> IcalParser::rsvpparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         RsvpParam ret;
 
         if (!token("RSVP")) return nullopt;
@@ -5590,7 +5591,7 @@ optional<RsvpParam> IcalParser::rsvpparam() {
 //       sentbyparam        = "SENT-BY" "=" DQUOTE cal-address DQUOTE
 optional<SentByParam> IcalParser::sentbyparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         SentByParam ret;
 
         if (!token("SENT-BY")) return nullopt;
@@ -5609,7 +5610,7 @@ optional<SentByParam> IcalParser::sentbyparam() {
 //       tzidprefix = "/"
 optional<TzIdPrefix> IcalParser::tzidprefix() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzIdPrefix ret;
 
         if (auto v = token("/")) ret.value = *v;
@@ -5622,7 +5623,7 @@ optional<TzIdPrefix> IcalParser::tzidprefix() {
 //       tzidparam  = "TZID" "=" [tzidprefix] paramtext
 optional<TzIdParam> IcalParser::tzidparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         TzIdParam ret;
 
         if (!token("TZID")) return nullopt;
@@ -5684,7 +5685,7 @@ optional<ValueType> IcalParser::valuetype() {
 //       valuetypeparam = "VALUE" "=" valuetype
 optional<ValueTypeParam> IcalParser::valuetypeparam() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ValueTypeParam ret;
 
         if (!token("VALUE")) return nullopt;
@@ -5701,7 +5702,7 @@ optional<ValueTypeParam> IcalParser::valuetypeparam() {
 //     ; Some other IANA-registered iCalendar parameter.
 optional<IanaParam> IcalParser::iana_param() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         IanaParam ret;
 
         if (auto v = iana_token()) ret.token = *v;
@@ -5722,7 +5723,7 @@ optional<IanaParam> IcalParser::iana_param() {
 //     ; A non-standard, experimental parameter.
 optional<XParam> IcalParser::x_param() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         XParam ret;
 
         if (auto v = x_name()) ret.name = *v;
@@ -5769,7 +5770,7 @@ ICalParameter IcalParser::expect_icalparameter() {
 }
 optional<ICalParameter> IcalParser::icalparameter() {
         CALLSTACK;
-        save_input_pos ptran(is);
+        save_input_pos ptran(*is);
         ICalParameter ret;
 
         if (auto v = altrepparam()) ret = *v;

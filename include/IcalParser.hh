@@ -35,7 +35,66 @@ using std::istream;
 using std::variant;
 
 class IcalParser {
-        std::istream &is;
+
+        struct Unfolder {
+        private:
+                std::istream &is_;
+        public:
+                Unfolder(std::istream &is) : is_(is) {
+                }
+
+                auto tellg() { return is_.tellg(); }
+                auto get() {
+                        absorb_folds();
+                        return is_.get();
+                }
+
+                auto& is() { return is_; }
+                std::istream& operator* () { return is_; }
+                std::istream* operator-> () { return &is_; }
+
+                friend void print_location(
+                        std::istream::pos_type pos,
+                        Unfolder &u
+                ) {
+                        return print_location(pos, u.is_);
+                }
+
+        private:
+                void absorb_folds() {
+                        save_input_pos ptran(is_);
+
+                        using ct = std::char_traits<char>;
+
+                        auto x = is_.get();
+                        if (x == ct::eof()) {
+                                return;
+                        } else if (x == ct::to_int_type('\n')) {
+                                x = is_.get();
+                        } else if (x == ct::to_int_type('\r')) {
+                                x = is_.get();
+                                if (x == ct::to_int_type('\n')) {
+                                        x = is_.get();
+                                }
+                        } else {
+                                return;
+                        }
+
+                        if (x == ct::eof()) {
+                                return;
+                        } else if (x == ' ' || x == '\t') {
+                                do {
+                                        x = is_.get();
+                                } while (x == ' ' || x == '\t');
+                                is_.unget();
+                        } else {
+                                return;
+                        }
+
+                        ptran.commit();
+                }
+        };
+        Unfolder is;
 public:
         explicit IcalParser(std::istream &is) : is{is} {
         }

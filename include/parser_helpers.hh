@@ -109,7 +109,7 @@ extern CallStack callStack;
         print_location(is.tellg(), is);\
         CallStack::Entry \
                 call_stack_entry_##__LINE__ = callStack.push(__func__);
-#elif 1
+#elif 0
 #define CALLSTACK \
         std::cerr << "[func: " << std::setw(16) << __func__ << "] "; \
         print_location(is.tellg(), is);
