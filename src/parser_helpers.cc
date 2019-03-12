@@ -21,6 +21,7 @@ void dump_remainder(std::istream &is) {
 }
 
 void dump_remainder_and_exit(std::istream &is) {
+        print_location(is.tellg(), is);
         dump_remainder(is);
         exit(1);
 }

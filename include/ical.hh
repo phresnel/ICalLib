@@ -30,14 +30,47 @@ using std::tuple;
 using std::make_tuple;
 
 // parse result
-struct parse_error {
-        int line, col;
+struct SourceCodePos {
+        int line = -1;
+        string filename;
+        string function;
+};
+struct ParserPos {
+        int line = -1, col = -1;
+};
+struct ParsingError {
+        SourceCodePos sourceCodePos;
+        ParserPos parserPos;
         string msg;
 };
-struct no_match {
-};
+#define PARSING_ERROR(msg) \
+        ParsingError{ \
+                SourceCodePos{__LINE__, __FILE__, __func__}, \
+                ParserPos{}, \
+                msg \
+        }
+
+struct NoMatch { };
+inline NoMatch no_match;
+
 template <typename T>
-using result = xvariant<parse_error, no_match, T>;
+using result = variant<NoMatch, ParsingError, T>;
+
+template <typename T>
+inline bool is_error(result<T> const &r) {
+        return holds_alternative<ParsingError>(r);
+}
+
+template <typename T>
+inline bool is_match(result<T> const &r) {
+        return holds_alternative<T>(r);
+}
+
+template <typename T>
+inline T operator* (result<T> const &r) {
+        return get<T>(r);
+}
+
 
 // mixins
 struct having_string_name { string name; };
@@ -416,7 +449,11 @@ struct Repeat : having_integer_value {
         RepParam params;
 };
 
-struct IanaProp {};
+struct IanaProp {
+        string ianaToken;
+        vector<ICalParameter> params;
+        string value;
+};
 
 struct AudioProp {
         Action action;

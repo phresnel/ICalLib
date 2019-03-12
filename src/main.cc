@@ -15,8 +15,9 @@ void read_file(std::string const &filename) {
         //std::stringstream ss; ss << f.rdbuf();
         try {
                 IcalParser parser(f);
-                auto ical = parser.expect_ical();
-                std::cout << ical << std::endl;
+                auto ical = parser.icalobject();
+                if (is_match(ical))
+                        std::cout << *ical << std::endl;
         } catch (syntax_error &e) {
                 std::cerr << "syntax-error:" << e.what();
                 print_location(e.pos, f);
