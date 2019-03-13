@@ -43,7 +43,7 @@ struct ParsingError {
         ParserPos parserPos;
         string msg;
 };
-#define PARSING_ERROR(msg) \
+#define SYNTAX_ERROR(msg) \
         ParsingError{ \
                 SourceCodePos{__LINE__, __FILE__, __func__}, \
                 ParserPos{}, \

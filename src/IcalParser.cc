@@ -356,14 +356,14 @@ result<ContentLine> IcalParser::contentline() {
 
         while (is_match(token(";"))) {
                 if (auto v = param(); is_match(v)) ret.params.push_back(*v);
-                else PARSING_ERROR("");
+                else SYNTAX_ERROR("");
         }
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = value(); is_match(v)) ret.value = *v;
         else return no_match;
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -388,9 +388,10 @@ result<string> IcalParser::name() {
 result<string> IcalParser::iana_token_char() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        string ret;
 
-        if (auto v = alnum(); is_match(v)) return *v;
-        if (auto v = token("-"); is_match(v)) return *v;
+        if (auto v = alnum(); is_match(v)) ret = *v;
+        if (auto v = token("-"); is_match(v)) ret = *v;
 
         ptran.commit();
         return no_match;
@@ -405,10 +406,10 @@ result<string> IcalParser::iana_token() {
         } else {
                 return no_match;
         }
-        for (auto v = iana_token_char(); is_match(v); v = iana_token_char())
+        for (auto v = iana_token_char(); is_match(v); v = iana_token_char()) {
                 ret += *v;
+        }
         // TODO: IANA iCalendar identifiers
-
         ptran.commit();
         return ret;
 }
@@ -844,15 +845,15 @@ result<Param> IcalParser::param() {
         if (auto v = param_name(); is_match(v)) ret.name = *v;
         else return no_match;
 
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = param_value(); is_match(v)) ret.values.push_back(*v);
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         for (auto v = token(","); is_match(v); v = token(",")) {
                 if (auto v = param_value(); is_match(v))
                         ret.values.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -910,7 +911,7 @@ result<string> IcalParser::quoted_string() {
         }
 
         if (!is_match(dquote()))
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -937,7 +938,7 @@ result<Calendar> IcalParser::icalobject() {
         if (auto v = icalbody(); is_match(v))
                 ret = *v;
         if (!is_match(key_value_newline("END", "VCALENDAR")))
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         ptran.commit();
         // TODO: The grammar says that there can be more than 1 icalobject.
         return ret;
@@ -951,11 +952,11 @@ result<Calendar> IcalParser::icalbody() {
 
         std::cerr << "expect_icalbody: parsing calprops ...\n";
         if (auto v = calprops(); is_match(v)) ret.properties = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         std::cerr << "expect_icalbody: parsing components ...\n";
         if (auto v = component(); is_match(v)) ret.components = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         std::cerr << "expect_icalbody: done\n";
         ptran.commit();
@@ -1019,14 +1020,14 @@ result<ProdId> IcalParser::prodid() {
         if (!is_match(token("PRODID"))) return no_match;
 
         if (auto v = pidparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (is_match(token(":"))) return PARSING_ERROR("");
+        if (is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = pidvalue(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1041,14 +1042,14 @@ result<Version> IcalParser::version() {
         if (!is_match(token("VERSION"))) return no_match;
 
         if (auto v = verparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = vervalue(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1061,7 +1062,7 @@ result<std::vector<OtherParam>> IcalParser::verparam() {
         std::vector<OtherParam> ret;
         while(is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1089,14 +1090,14 @@ result<CalScale> IcalParser::calscale() {
         if (!is_match(token("CALSCALE"))) return no_match;
 
         if (auto v = calparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = calvalue(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1109,7 +1110,7 @@ result<vector<OtherParam>> IcalParser::calparam() {
         vector<OtherParam> ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1132,14 +1133,14 @@ result<Method> IcalParser::method() {
         if (!is_match(token("METHOD"))) return no_match;
 
         if (auto v = metparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = metvalue(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
         ptran.commit();
         return ret;
 }
@@ -1151,7 +1152,7 @@ result<std::vector<OtherParam>> IcalParser::metparam() {
         vector<OtherParam> ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1175,14 +1176,14 @@ result<XProp> IcalParser::x_prop() {
         while (is_match(token(";"))) {
                 if (auto v = icalparameter(); is_match(v))
                         ret.params.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = value(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1209,7 +1210,7 @@ result<string> IcalParser::x_name() {
                 ret += *v;
 
                 if (auto v = token("-"); is_match(v)) ret += *v;
-                else PARSING_ERROR("");
+                else SYNTAX_ERROR("");
         }
 
         // 1*(ALPHA / DIGIT / "-")
@@ -1218,7 +1219,7 @@ result<string> IcalParser::x_name() {
         } else if (auto v = token("-"); is_match(v)) {
                 ret += *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         while (true) {
                 if (auto v = alnum(); is_match(v)) {
@@ -1246,16 +1247,18 @@ result<IanaProp> IcalParser::iana_prop() {
         while (is_match(token(";"))) {
                 if (auto v = icalparameter(); is_match(v))
                         ret.params.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = value(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
         ptran.commit();
+
+        return ret;
 }
 
 //       pidparam   = *(";" other-param)
@@ -1265,7 +1268,7 @@ result<std::vector<OtherParam>> IcalParser::pidparam() {
         vector<OtherParam> ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1552,7 +1555,7 @@ result<ActionParam> IcalParser::actionparam() {
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v))
                         ret.params.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1565,14 +1568,14 @@ result<Action> IcalParser::action() {
         if (!is_match(token("ACTION"))) return no_match;
 
         if (auto v = actionparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = actionvalue(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1611,14 +1614,14 @@ result<TrigAbs> IcalParser::trigabs() {
                 if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        return PARSING_ERROR("");
+                        return SYNTAX_ERROR("");
                 }
         }
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = date_time(); is_match(v)) ret.dateTime = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1661,14 +1664,14 @@ result<TrigRel> IcalParser::trigrel() {
                 } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        return PARSING_ERROR("");
+                        return SYNTAX_ERROR("");
                 }
         }
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = dur_value(); is_match(v)) ret.durValue = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1683,9 +1686,9 @@ result<Trigger> IcalParser::trigger() {
 
         if (auto v = trigrel(); is_match(v)) ret = *v;
         else if (auto v = trigabs(); is_match(v)) ret = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -1699,7 +1702,7 @@ result<RepParam> IcalParser::repparam() {
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v))
                         ret.params.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -1714,14 +1717,14 @@ result<Repeat> IcalParser::repeat() {
         if (!is_match(token("REPEAT"))) return no_match;
 
         if (auto v = repparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = integer(); is_match(v)) ret.value = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR(""); // error
 
         ptran.commit();
         return ret;
@@ -1782,7 +1785,7 @@ result<AudioProp> IcalParser::audioprop() {
         // std::cerr << "  has action : " << (req_act?"yes":"no") << std::endl;
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
         if (!(req_act && req_trig)) {
-                return PARSING_ERROR("Missing action and/or trigger.");
+                return SYNTAX_ERROR("Missing action and/or trigger.");
         }
         ptran.commit();
         return ret;
@@ -1844,7 +1847,7 @@ result<DispProp> IcalParser::dispprop() {
         // std::cerr << "  has desc   : " << (req_desc?"yes":"no") << std::endl;
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
         if (!(req_act && req_desc && req_trig)) {
-                 return PARSING_ERROR(
+                 return SYNTAX_ERROR(
                          "Missing action and/or description and/or trigger");
         }
 
@@ -1926,7 +1929,7 @@ result<EmailProp> IcalParser::emailprop() {
         // std::cerr << "  has trig   : " << (req_trig?"yes":"no") << std::endl;
         // std::cerr << "  has summ   : " << (req_summ?"yes":"no") << std::endl;
         if (!(req_act && req_desc && req_trig && req_summ)) {
-                return PARSING_ERROR("Missing action and/or description "
+                return SYNTAX_ERROR("Missing action and/or description "
                                      "and/or trigger and/or summary");
         }
 
@@ -1952,10 +1955,10 @@ result<Alarm> IcalParser::alarmc() {
         if (auto v = emailprop(); is_match(v)) ret = *v;
         else if (auto v = dispprop(); is_match(v)) ret = *v;
         else if (auto v = audioprop(); is_match(v)) ret = *v;
-        else return PARSING_ERROR("Must have audioprop, dispprop or emailprop");
+        else return SYNTAX_ERROR("Must have audioprop, dispprop or emailprop");
 
         if (!is_match(key_value_newline("END", "VALARM")))
-                return PARSING_ERROR("Missing END:VALARM");
+                return SYNTAX_ERROR("Missing END:VALARM");
 
         ptran.commit();
         return ret;
@@ -2156,9 +2159,9 @@ result<DurDay> IcalParser::dur_day() {
         DurDay ret;
 
         if (auto v = digits(1, -1); is_match(v)) ret.value += *v;
-        else return nullopt;
+        else return no_match;
 
-        if (!is_match(token("D"))) return nullopt;
+        if (!is_match(token("D"))) return no_match;
 
         ptran.commit();
         return ret;
@@ -2170,7 +2173,7 @@ result<DurTime> IcalParser::dur_time() {
         save_input_pos ptran(*is);
         DurTime ret;
 
-        if (!is_match(token("T"))) return nullopt;
+        if (!is_match(token("T"))) return no_match;
 
         if (auto v = dur_hour(); is_match(v)) {
                 ret = *v;
@@ -2223,7 +2226,7 @@ result<DurValue> IcalParser::dur_value() {
         else if (auto v = dur_week(); is_match(v)) {
                 ret.value = *v;
         }
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2237,9 +2240,9 @@ bool IcalParser::period_start() {
         CALLSTACK;
         save_input_pos ptran(*is);
         const auto match =
-                date_time() &&
-                token("/") &&
-                dur_value() ;
+                is_match(date_time()) &&
+                is_match(token("/")) &&
+                is_match(dur_value()) ;
         if (!match)
                 return false;
         ptran.commit();
@@ -2251,9 +2254,9 @@ bool IcalParser::period_explicit() {
         CALLSTACK;
         save_input_pos ptran(*is);
         const auto match =
-                date_time() &&
-                token("/") &&
-                date_time() ;
+                is_match(date_time()) &&
+                is_match(token("/")) &&
+                is_match(date_time()) ;
         if (!match)
                 return false;
         ptran.commit();
@@ -2290,8 +2293,9 @@ result<DtStampParams> IcalParser::stmparam() {
         save_input_pos ptran(*is);
         DtStampParams ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2303,17 +2307,17 @@ result<DtStamp> IcalParser::dtstamp() {
         save_input_pos ptran(*is);
         DtStamp ret;
 
-        if (!is_match(token("DTSTAMP"))) return nullopt;
+        if (!is_match(token("DTSTAMP"))) return no_match;
 
         if (auto v = stmparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = date_time(); is_match(v)) ret.date_time = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2325,7 +2329,7 @@ result<vector<OtherParam>> IcalParser::uidparam() {
         vector<OtherParam> ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2336,17 +2340,17 @@ result<Uid> IcalParser::uid() {
         save_input_pos ptran(*is);
         Uid ret;
 
-        if (!is_match(token("UID"))) return nullopt;
+        if (!is_match(token("UID"))) return no_match;
 
         if (auto v = uidparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = text(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!newline())  return nullopt;
+        if (!is_match(newline()))  return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2378,24 +2382,24 @@ result<DtStartParams> IcalParser::dtstparam() {
         save_input_pos ptran(*is);
         DtStartParams ret;
 
-        while (token(";")) {
-                if (token("VALUE")) {
+        while (is_match(token(";"))) {
+                if (is_match(token("VALUE"))) {
                         if (!is_match(token("=")))
-                                return nullopt;
+                                return SYNTAX_ERROR("");
 
                         if (auto v = token("DATE-TIME"); is_match(v)) {
                                 ret.value = *v;
-                        } else if (auto v = token("DATE"); is_match(v) {
+                        } else if (auto v = token("DATE"); is_match(v)) {
                                 ret.value = *v;
                         } else {
-                                return nullopt;
+                                return SYNTAX_ERROR("");
                         }
                 } else if (auto v = tzidparam(); is_match(v)) {
                         ret.tz_id = *v;
                 } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        return nullopt;
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -2408,17 +2412,17 @@ result<DtStart> IcalParser::dtstart() {
         save_input_pos ptran(*is);
         DtStart ret;
 
-        if (!is_match(token("DTSTART"))) return nullopt;
+        if (!is_match(token("DTSTART"))) return no_match;
 
         if (auto v = dtstparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = dtstval(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2434,7 +2438,7 @@ result<string> IcalParser::classvalue() {
         if (auto v = token("CONFIDENTIAL"); is_match(v)) return v;
         if (auto v = iana_token(); is_match(v)) return v;
         if (auto v = x_name(); is_match(v)) return v;
-        else return nullopt;
+        else return no_match;
 }
 
 //       classparam = *(";" other-param)
@@ -2444,8 +2448,8 @@ result<ClassParams> IcalParser::classparam() {
         ClassParams ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v))
-                        ret.push_back(*v);
-                else return PARSING_ERROR("");
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2457,17 +2461,17 @@ result<Class> IcalParser::class_() {
         save_input_pos ptran(*is);
         Class ret;
 
-        if (!is_match(token("CLASS"))) return nullopt;
+        if (!is_match(token("CLASS"))) return no_match;
 
         if (auto v = classparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = classvalue(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2478,8 +2482,9 @@ result<CreaParam> IcalParser::creaparam() {
         save_input_pos ptran(*is);
         CreaParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2490,17 +2495,17 @@ result<Created> IcalParser::created() {
         save_input_pos ptran(*is);
         Created ret;
 
-        if (!is_match(token("CREATED"))) return nullopt;
+        if (!is_match(token("CREATED"))) return no_match;
 
         if (auto v = creaparam(); is_match(v)) ret.params = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = date_time(); is_match(v)) ret.dateTime = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR(""); // error
 
         ptran.commit();
         return ret;
@@ -2523,7 +2528,7 @@ result<DescParams> IcalParser::descparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         DescParams ret;
-        while(token(";")) {
+        while(is_match(token(";"))) {
                 if (auto v = altrepparam(); is_match(v)) {
                         ret.alt_rep = *v;
                 } else if (auto v = languageparam(); is_match(v)) {
@@ -2531,8 +2536,7 @@ result<DescParams> IcalParser::descparam() {
                 } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        std::cerr << " unknown" << std::endl;
-                        // TODO: warn
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -2544,17 +2548,17 @@ result<Description> IcalParser::description() {
         save_input_pos ptran(*is);
         Description ret;
 
-        if (!is_match(token("DESCRIPTION"))) return nullopt;
+        if (!is_match(token("DESCRIPTION"))) return no_match;
 
         if (auto v = descparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = text(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2566,13 +2570,21 @@ result<GeoValue> IcalParser::geovalue() {
         CALLSTACK;
         save_input_pos ptran(*is);
         GeoValue ret;
-        if (auto v = float_(); is_match(v)) ret.latitude = *v;
-        else return nullopt;
 
-        if (!is_match(token(";"))) return nullopt;
+        if (auto v = float_(); is_match(v)) {
+                ret.latitude = *v;
+        } else {
+                return no_match;
+        }
 
-        if (auto v = float_(); is_match(v)) ret.longitude = *v;
-        else return nullopt;
+        if (!is_match(token(";")))
+                return no_match;
+
+        if (auto v = float_(); is_match(v)) {
+                ret.longitude = *v;
+        } else {
+                return no_match;
+        }
 
         ptran.commit();
         return ret;
@@ -2583,8 +2595,9 @@ result<GeoParams> IcalParser::geoparam() {
         save_input_pos ptran(*is);
         GeoParams ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2595,17 +2608,17 @@ result<Geo> IcalParser::geo() {
         save_input_pos ptran(*is);
         Geo ret;
 
-        if (!is_match(token("GEO"))) return nullopt;
+        if (!is_match(token("GEO"))) return no_match;
 
         if (auto v = geoparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = geovalue(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2616,8 +2629,9 @@ result<LstParams> IcalParser::lstparam() {
         save_input_pos ptran(*is);
         LstParams ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2628,17 +2642,17 @@ result<LastMod> IcalParser::last_mod() {
         save_input_pos ptran(*is);
         LastMod ret;
 
-        if (!is_match(token("LAST-MODIFIED"))) return nullopt;
+        if (!is_match(token("LAST-MODIFIED"))) return no_match;
 
         if (auto v = lstparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
         if (auto v = date_time(); is_match(v)) ret.dateTime = *v;
-        return nullopt;
+        return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2662,7 +2676,7 @@ result<LocParams> IcalParser::locparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         LocParams ret;
-        while(token(";")) {
+        while(is_match(token(";"))) {
                 if (auto v = altrepparam(); is_match(v)) {
                         ret.alt_rep = *v;
                 } else if (auto v = languageparam(); is_match(v)) {
@@ -2670,8 +2684,7 @@ result<LocParams> IcalParser::locparam() {
                 } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        std::cerr << " unknown" << std::endl;
-                        // TODO: warn
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -2683,17 +2696,17 @@ result<Location> IcalParser::location() {
         save_input_pos ptran(*is);
         Location ret;
         if (!is_match(token("LOCATION")))
-                return nullopt;
+                return no_match;
 
         if (auto v = locparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
         if (auto v = text(); is_match(v)) ret.value = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
 
@@ -2719,7 +2732,7 @@ result<OrgParams> IcalParser::orgparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         OrgParams ret;
-        while(token(";")) {
+        while(is_match(token(";"))) {
                 if (auto v = cnparam(); is_match(v)) {
                         ret.cn = *v;
                 } else if (auto v = dirparam(); is_match(v)) {
@@ -2731,8 +2744,7 @@ result<OrgParams> IcalParser::orgparam() {
                 } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        std::cerr << " unknown" << std::endl;
-                        // TODO: warn
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -2750,25 +2762,25 @@ result<Organizer> IcalParser::organizer() {
         Organizer ret;
 
         if (!is_match(token("ORGANIZER")))
-                return nullopt;
+                return no_match;
 
         if (auto v = orgparam(); is_match(v)) {
                 ret.params = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         if (!is_match(token(":")))
-                return nullopt;
+                return SYNTAX_ERROR("");
 
         if (auto v = cal_address(); is_match(v)) {
                 ret.address = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
-        if (!newline())
-                return nullopt;
+        if (!is_match(newline()))
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2792,7 +2804,7 @@ bool IcalParser::prioparam() {
         PrioParam ret;
         while (is_match(token(";"))) {
                 if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;*/
@@ -2802,14 +2814,16 @@ bool IcalParser::prioparam() {
 result<Priority> IcalParser::priority() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("PRIORITY")))
+                return no_match;
+
         const auto success =
-                token("PRIORITY") &&
                 prioparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 priovalue() &&
-                newline();
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -2819,29 +2833,31 @@ result<SeqParams> IcalParser::seqparam() {
         save_input_pos ptran(*is);
         SeqParams ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
 }
+
 //       seq = "SEQUENCE" seqparam ":" integer CRLF     ; Default is "0"
 result<Seq> IcalParser::seq() {
         CALLSTACK;
         save_input_pos ptran(*is);
         Seq ret;
 
-        if (!is_match(token("SEQUENCE"))) return nullopt;
+        if (!is_match(token("SEQUENCE"))) return no_match;
 
-        if (auto v = seqparam()) ret.params = *v;
-        else return nullopt;
+        if (auto v = seqparam(); is_match(v)) ret.params = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
-        if (auto v = integer()) ret.value = *v;
-        else return nullopt;
+        if (auto v = integer(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2857,10 +2873,10 @@ result<StatvalueEvent> IcalParser::statvalue_event() {
         save_input_pos ptran(*is);
         StatvalueEvent ret;
 
-        if (auto v = token("TENTATIVE")) ret.value = *v;
-        else if (auto v = token("CONFIRMED")) ret.value = *v;
-        else if (auto v = token("CANCELLED")) ret.value = *v;
-        else return nullopt;
+        if (auto v = token("TENTATIVE"); is_match(v)) ret.value = *v;
+        else if (auto v = token("CONFIRMED"); is_match(v)) ret.value = *v;
+        else if (auto v = token("CANCELLED"); is_match(v)) ret.value = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -2876,11 +2892,11 @@ result<StatvalueTodo> IcalParser::statvalue_todo() {
         save_input_pos ptran(*is);
         StatvalueTodo ret;
 
-        if (auto v = token("NEEDS-ACTION")) ret.value = *v;
-        else if (auto v = token("COMPLETED")) ret.value = *v;
-        else if (auto v = token("IN-PROCESS")) ret.value = *v;
-        else if (auto v = token("CANCELLED")) ret.value = *v;
-        else return nullopt;
+        if (auto v = token("NEEDS-ACTION"); is_match(v)) ret.value = *v;
+        else if (auto v = token("COMPLETED"); is_match(v)) ret.value = *v;
+        else if (auto v = token("IN-PROCESS"); is_match(v)) ret.value = *v;
+        else if (auto v = token("CANCELLED"); is_match(v)) ret.value = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -2895,10 +2911,10 @@ result<StatvalueJour> IcalParser::statvalue_jour() {
         save_input_pos ptran(*is);
         StatvalueJour ret;
 
-        if (auto v = token("DRAFT")) ret.value = *v;
-        else if (auto v = token("FINAL")) ret.value = *v;
-        else if (auto v = token("CANCELLED")) ret.value = *v;
-        else return nullopt;
+        if (auto v = token("DRAFT"); is_match(v)) ret.value = *v;
+        else if (auto v = token("FINAL"); is_match(v)) ret.value = *v;
+        else if (auto v = token("CANCELLED"); is_match(v)) ret.value = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -2912,10 +2928,10 @@ result<Statvalue> IcalParser::statvalue() {
         save_input_pos ptran(*is);
         Statvalue ret;
 
-        if (auto v = statvalue_event()) ret = *v;
-        else if (auto v = statvalue_todo()) ret = *v;
-        else if (auto v = statvalue_jour()) ret = *v;
-        else return nullopt;
+        if (auto v = statvalue_event(); is_match(v)) ret = *v;
+        else if (auto v = statvalue_todo(); is_match(v)) ret = *v;
+        else if (auto v = statvalue_jour(); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -2927,8 +2943,9 @@ result<StatParams> IcalParser::statparam() {
         save_input_pos ptran(*is);
         StatParams ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -2940,17 +2957,17 @@ result<Status> IcalParser::status() {
         save_input_pos ptran(*is);
         Status ret;
 
-        if (!is_match(token("STATUS"))) return nullopt;
+        if (!is_match(token("STATUS"))) return no_match;
 
-        if (auto v = statparam()) ret.params = *v;
-        else return PARSING_ERROR("");
+        if (auto v = statparam(); is_match(v)) ret.params = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
-        if (auto v = statvalue()) ret.value = *v;
-        else return nullopt;
+        if (auto v = statvalue(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -2974,16 +2991,15 @@ result<SummParams> IcalParser::summparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         SummParams ret;
-        while(token(";")) {
-                if (auto v = altrepparam()) {
+        while(is_match(token(";"))) {
+                if (auto v = altrepparam(); is_match(v)) {
                         ret.alt_rep = *v;
-                } else if (auto v = languageparam()) {
+                } else if (auto v = languageparam(); is_match(v)) {
                         ret.language = *v;
-                } else if (auto v = other_param()) {
+                } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        std::cerr << " unknown" << std::endl;
-                        // TODO: warn
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -2996,17 +3012,17 @@ result<Summary> IcalParser::summary() {
         save_input_pos ptran(*is);
         Summary ret;
 
-        if (!is_match(token("SUMMARY")))  return nullopt;
+        if (!is_match(token("SUMMARY")))  return no_match;
 
-        if (auto v = summparam()) ret.params = *v;
-        else return nullopt;
+        if (auto v = summparam(); is_match(v)) ret.params = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
-        if (auto v = text()) ret.value = *v;
-        else return nullopt;
+        if (auto v = text(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -3016,8 +3032,8 @@ result<Summary> IcalParser::summary() {
 bool IcalParser::transparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        while (token(";")) {
-                if (!other_param())
+        while (is_match(token(";"))) {
+                if (!is_match(other_param()))
                         return false;
         }
         ptran.commit();
@@ -3033,8 +3049,8 @@ bool IcalParser::transvalue() {
         CALLSTACK;
         save_input_pos ptran(*is);
         const auto success =
-                token("OPAQUE") ||
-                token("TRANSPARENT");
+                is_match(token("OPAQUE")) ||
+                is_match(token("TRANSPARENT"));
         if (!success)
                 return false;
         ptran.commit();
@@ -3045,14 +3061,15 @@ bool IcalParser::transvalue() {
 result<Transp> IcalParser::transp() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("TRANSP")))
+                return no_match;
         const auto success =
-                token("TRANSP") &&
                 transparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 transvalue() &&
-                newline();
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -3062,9 +3079,9 @@ result<Uri> IcalParser::uri() {
         save_input_pos ptran(*is);
         const auto uri = rfc3986::read_URI(*is);
         if (!uri)
-                return nullopt;
+                return no_match;
         ptran.commit();
-        return uri;
+        return *uri;
 }
 //       urlparam   = *(";" other-param)
 bool IcalParser::urlparam() {
@@ -3078,14 +3095,15 @@ bool IcalParser::urlparam() {
 result<Url> IcalParser::url() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("URL")))
+                return no_match;
         const auto success =
-                token("URL") &&
                 urlparam() &&
-                token(":") &&
-                uri() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(uri()) &&
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -3094,7 +3112,8 @@ result<Url> IcalParser::url() {
 bool IcalParser::ridval() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        const auto success = date_time() || date();
+        const auto success = is_match(date_time()) ||
+                             is_match(date());
         if (!success)
                 return false;
         ptran.commit();
@@ -3122,10 +3141,11 @@ bool IcalParser::ridparam_single() {
         {
                 save_input_pos ptran(*is);
                 const auto success =
-                        token(";") &&
-                        token("VALUE") &&
-                        token("=") &&
-                        (token("DATE-TIME") || token("DATE"));
+                        is_match(token(";")) &&
+                        is_match(token("VALUE")) &&
+                        is_match(token("=")) &&
+                        (is_match(token("DATE-TIME")) ||
+                         is_match(token("DATE"))) ;
                 if (success) {
                         ptran.commit();
                         return true;
@@ -3135,8 +3155,8 @@ bool IcalParser::ridparam_single() {
         {
                 save_input_pos ptran(*is);
                 const auto success =
-                        token(";") &&
-                        (tzidparam() || rangeparam());
+                        is_match(token(";")) &&
+                        (is_match(tzidparam()) || is_match(rangeparam()));
                 if (success) {
                         ptran.commit();
                         return true;
@@ -3145,9 +3165,8 @@ bool IcalParser::ridparam_single() {
         // (";" other-param)
         {
                 save_input_pos ptran(*is);
-                const auto success =
-                        token(";") &&
-                        other_param();
+                const auto success = is_match(token(";")) &&
+                                     is_match(other_param());
                 if (success) {
                         ptran.commit();
                         return true;
@@ -3170,8 +3189,8 @@ result<SetPosDay> IcalParser::setposday() {
         save_input_pos ptran(*is);
         SetPosDay ret;
 
-        if (auto v = yeardaynum()) ret = *v;
-        else return nullopt;
+        if (auto v = yeardaynum(); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3183,12 +3202,15 @@ result<BySpList> IcalParser::bysplist() {
         save_input_pos ptran(*is);
         BySpList ret;
 
-        do {
-                if (auto v = setposday()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = setposday(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = setposday(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
+
+        if (ret.empty()) return no_match;
 
         ptran.commit();
         return ret;
@@ -3200,8 +3222,8 @@ result<MonthNum> IcalParser::monthnum() {
         save_input_pos ptran(*is);
         MonthNum ret;
 
-        if (auto v = digits(1,2)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3213,12 +3235,15 @@ result<ByMoList> IcalParser::bymolist() {
         save_input_pos ptran(*is);
         ByMoList ret;
 
-        do {
-                if (auto v = monthnum()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = monthnum(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = monthnum(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
+
+        if (ret.empty()) return no_match;
 
         ptran.commit();
         return ret;
@@ -3236,12 +3261,15 @@ result<ByWkNoList> IcalParser::bywknolist() {
         save_input_pos ptran(*is);
         ByWkNoList ret;
 
-        do {
-                if (auto v = weeknum()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = weeknum(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = weeknum(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
+
+        if (ret.empty()) return no_match;
 
         ptran.commit();
         return ret;
@@ -3253,8 +3281,8 @@ result<OrdYrDay> IcalParser::ordyrday() {
         save_input_pos ptran(*is);
         OrdYrDay ret;
 
-        if (auto v = digits(1,3)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,3); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3270,8 +3298,8 @@ result<YearDayNum> IcalParser::yeardaynum() {
         else if (auto v = minus()) ret.sign = -1;
         else ret.sign = +1;
 
-        if (auto v = ordyrday()) ret.day = *v;
-        else return nullopt;
+        if (auto v = ordyrday(); is_match(v)) ret.day = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3283,12 +3311,15 @@ result<ByYrDayList> IcalParser::byyrdaylist() {
         save_input_pos ptran(*is);
         ByYrDayList ret;
 
-        do {
-                if (auto v = yeardaynum()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = yeardaynum(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = yeardaynum(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
+
+        if (ret.empty()) return no_match;
 
         ptran.commit();
         return ret;
@@ -3300,8 +3331,8 @@ result<OrdMoDay> IcalParser::ordmoday() {
         save_input_pos ptran(*is);
         OrdMoDay ret;
 
-        if (auto v = digits(1,2)) ret = *v;
-        return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        return no_match;
 
         ptran.commit();
         return ret;
@@ -3317,8 +3348,8 @@ result<MonthDayNum> IcalParser::monthdaynum() {
         else if (auto v = minus()) ret.sign = -1;
         else ret.sign = +1;
 
-        if (auto v = ordmoday()) ret.day = *v;
-        else return nullopt;
+        if (auto v = ordmoday(); is_match(v)) ret.day = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3330,12 +3361,13 @@ result<ByMoDayList> IcalParser::bymodaylist() {
         save_input_pos ptran(*is);
         ByMoDayList ret;
 
-        do {
-                if (auto v = monthdaynum()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = monthdaynum(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = monthdaynum(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
 
         ptran.commit();
         return ret;
@@ -3349,14 +3381,14 @@ result<WeekDay> IcalParser::weekday() {
         save_input_pos ptran(*is);
         WeekDay ret;
 
-        if (token("SU")) ret = WeekDay::Sunday;
-        else if (token("MO")) ret = WeekDay::Monday;
-        else if (token("TU")) ret = WeekDay::Tuesday;
-        else if (token("WE")) ret = WeekDay::Wednesday;
-        else if (token("TH")) ret = WeekDay::Thursday;
-        else if (token("FR")) ret = WeekDay::Friday;
-        else if (token("SA")) ret = WeekDay::Saturday;
-        else return nullopt;
+        if (is_match(token("SU"))) ret = WeekDay::Sunday;
+        else if (is_match(token("MO"))) ret = WeekDay::Monday;
+        else if (is_match(token("TU"))) ret = WeekDay::Tuesday;
+        else if (is_match(token("WE"))) ret = WeekDay::Wednesday;
+        else if (is_match(token("TH"))) ret = WeekDay::Thursday;
+        else if (is_match(token("FR"))) ret = WeekDay::Friday;
+        else if (is_match(token("SA"))) ret = WeekDay::Saturday;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3367,8 +3399,8 @@ result<OrdWk> IcalParser::ordwk() {
         CALLSTACK;
         save_input_pos ptran(*is);
         OrdWk ret;
-        if (auto v = digits(1,2)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        else return no_match;
         ptran.commit();
         return ret;
 }
@@ -3399,21 +3431,21 @@ result<WeekDayNum> IcalParser::weekdaynum() {
 
         const int sign = plus() ? +1 : minus() ? -1 : 0;
         if (sign) {
-                if (auto v = ordwk()) {
+                if (auto v = ordwk(); is_match(v)) {
                         ret.week = SignedOrdWk();
                         ret.week->sign = sign;
                         ret.week->ordWk = *v;
                 } else {
-                        return nullopt; // error
+                        return no_match;
                 }
-        } else if (auto v = ordwk()) {
+        } else if (auto v = ordwk(); is_match(v)) {
                 ret.week = SignedOrdWk();
                 ret.week->sign = +1;
                 ret.week->ordWk = *v;
         }
 
-        if (auto v = weekday()) ret.weekDay = *v;
-        else return nullopt;
+        if (auto v = weekday(); is_match(v)) ret.weekDay = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3425,12 +3457,13 @@ result<ByWDayList> IcalParser::bywdaylist() {
         save_input_pos ptran(*is);
         ByWDayList ret;
 
-        do {
-                if (auto v = weekdaynum()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = weekdaynum(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = weekdaynum(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
 
         ptran.commit();
         return ret;
@@ -3442,8 +3475,8 @@ result<Seconds> IcalParser::seconds() {
         save_input_pos ptran(*is);
         Seconds ret;
 
-        if (auto v = digits(1,2)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3455,8 +3488,8 @@ result<Hour> IcalParser::hour() {
         save_input_pos ptran(*is);
         Hour ret;
 
-        if (auto v = digits(1,2)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3468,8 +3501,8 @@ result<Minutes> IcalParser::minutes() {
         save_input_pos ptran(*is);
         Hour ret;
 
-        if (auto v = digits(1,2)) ret = *v;
-        else return nullopt;
+        if (auto v = digits(1,2); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3481,12 +3514,13 @@ result<ByHrList> IcalParser::byhrlist() {
         save_input_pos ptran(*is);
         ByHrList ret;
 
-        do {
-                if (auto v = hour()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = hour(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = hour(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
 
         ptran.commit();
         return ret;
@@ -3498,12 +3532,13 @@ result<ByMinList> IcalParser::byminlist() {
         save_input_pos ptran(*is);
         ByMinList ret;
 
-        do {
-                if (auto v = minutes()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = minutes(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = minutes(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
 
         ptran.commit();
         return ret;
@@ -3515,12 +3550,13 @@ result<BySecList> IcalParser::byseclist() {
         save_input_pos ptran(*is);
         BySecList ret;
 
-        do {
-                if (auto v = seconds()) ret.push_back(*v);
-                else break;
-        } while (token(","));
+        if (auto v = seconds(); is_match(v)) ret.push_back(*v);
+        else return no_match;
 
-        if (ret.empty()) return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = seconds(); is_match(v)) ret.push_back(*v);
+                else return SYNTAX_ERROR("");
+        }
 
         ptran.commit();
         return ret;
@@ -3532,9 +3568,9 @@ result<EndDate> IcalParser::enddate() {
         save_input_pos ptran(*is);
         EndDate ret;
 
-        if (auto v = date()) ret = *v;
-        else if (auto v = date_time()) ret = *v;
-        else return nullopt;
+        if (auto v = date(); is_match(v)) ret = *v;
+        else if (auto v = date_time(); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3547,14 +3583,14 @@ result<Freq> IcalParser::freq() {
         save_input_pos ptran(*is);
         Freq ret;
 
-        if (token("SECONDLY")) ret = Freq::Secondly;
-        else if (token("MINUTELY")) ret = Freq::Minutely;
-        else if (token("HOURLY")) ret = Freq::Hourly;
-        else if (token("DAILY")) ret = Freq::Daily;
-        else if (token("WEEKLY")) ret = Freq::Weekly;
-        else if (token("MONTHLY")) ret = Freq::Monthly;
-        else if (token("YEARLY")) ret = Freq::Yearly;
-        else return nullopt;
+        if (is_match(token("SECONDLY"))) ret = Freq::Secondly;
+        else if (is_match(token("MINUTELY"))) ret = Freq::Minutely;
+        else if (is_match(token("HOURLY"))) ret = Freq::Hourly;
+        else if (is_match(token("DAILY"))) ret = Freq::Daily;
+        else if (is_match(token("WEEKLY"))) ret = Freq::Weekly;
+        else if (is_match(token("MONTHLY"))) ret = Freq::Monthly;
+        else if (is_match(token("YEARLY"))) ret = Freq::Yearly;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -3595,65 +3631,65 @@ result<Recur> IcalParser::recur() {
 
         do {
                 if (is_match(token("FREQ"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = freq(); is_match(v)) ret.freq = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("UNTIL"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = enddate(); is_match(v)) ret.duration = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("COUNT"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = digits(1,-1); is_match(v)) ret.duration = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("INTERVAL"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = digits(1,-1); is_match(v)) ret.interval = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYSECOND"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = byseclist(); is_match(v)) ret.bySecond = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYMINUTE"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = byminlist(); is_match(v)) ret.byMinute = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYHOUR"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = byhrlist(); is_match(v)) ret.byHour = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYDAY"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = bywdaylist(); is_match(v)) ret.byDay = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYMONTHDAY"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = bymodaylist(); is_match(v)) ret.byMonthDay = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYYEARDAY"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = byyrdaylist(); is_match(v)) ret.byYearDay = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYWEEKNO"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = bywknolist(); is_match(v)) ret.byweekNo = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYMONTH"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = bymolist(); is_match(v)) ret.byMonth = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("BYSETPOS"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = bysplist(); is_match(v)) ret.bySetpos = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else if (is_match(token("WKST"))) {
-                        if (!is_match(token("="))) return PARSING_ERROR("");
+                        if (!is_match(token("="))) return SYNTAX_ERROR("");
                         if (auto v = weekday(); is_match(v)) ret.wkst = *v;
-                        else return PARSING_ERROR("");
+                        else return SYNTAX_ERROR("");
                 } else {
-                        return PARSING_ERROR("");
+                        return SYNTAX_ERROR("");
                 }
-        } while (token(";"));
+        } while (is_match(token(";")));
 
         ptran.commit();
         return ret;
@@ -3663,14 +3699,15 @@ result<Recur> IcalParser::recur() {
 result<RecurId> IcalParser::recurid() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("RECURRENCE-ID")))
+                return no_match;
         const auto success =
-                token("RECURRENCE-ID") &&
                 ridparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 ridval() &&
-                newline();
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -3680,8 +3717,9 @@ result<RRulParam> IcalParser::rrulparam() {
         save_input_pos ptran(*is);
         RRulParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.otherParams.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -3693,17 +3731,17 @@ result<RRule> IcalParser::rrule() {
         save_input_pos ptran(*is);
         RRule ret;
 
-        if (!is_match(token("RRULE"))) return nullopt;
+        if (!is_match(token("RRULE"))) return no_match;
 
-        if (auto v = rrulparam()) ret.param = *v;
-        else return PARSING_ERROR("");
+        if (auto v = rrulparam(); is_match(v)) ret.param = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
-        if (auto v = recur()) ret.recur = *v;
-        else return PARSING_ERROR("");
+        if (auto v = recur(); is_match(v)) ret.recur = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -3713,8 +3751,8 @@ result<RRule> IcalParser::rrule() {
 //       ;Value MUST match value type
 result<DtEndVal> IcalParser::dtendval() {
         CALLSTACK;
-        if (auto v = date_time()) return DtEndVal{*v};
-        if (auto v = date()) return DtEndVal{*v};
+        if (auto v = date_time(); is_match(v)) return DtEndVal{*v};
+        if (auto v = date(); is_match(v)) return DtEndVal{*v};
         return result<DtStartVal>();
 }
 
@@ -3737,24 +3775,24 @@ result<DtEndParams> IcalParser::dtendparam() {
         save_input_pos ptran(*is);
         DtEndParams ret;
 
-        while (token(";")) {
-                if (token("VALUE")) {
+        while (is_match(token(";"))) {
+                if (is_match(token("VALUE"))) {
                         if (!is_match(token("=")))
-                                return nullopt;
+                                return SYNTAX_ERROR("");
 
-                        if (auto v = token("DATE-TIME")) {
+                        if (auto v = token("DATE-TIME"); is_match(v)) {
                                 ret.value = *v;
-                        } else if (auto v = token("DATE")) {
+                        } else if (auto v = token("DATE"); is_match(v)) {
                                 ret.value = *v;
                         } else {
-                                return nullopt;
+                                return SYNTAX_ERROR("");
                         }
-                } else if (auto v = tzidparam()) {
+                } else if (auto v = tzidparam(); is_match(v)) {
                         ret.tz_id = *v;
-                } else if (auto v = other_param()) {
+                } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        return nullopt;
+                        return no_match;
                 }
         }
         ptran.commit();
@@ -3767,17 +3805,17 @@ result<DtEnd> IcalParser::dtend() {
         save_input_pos ptran(*is);
         DtEnd ret;
 
-        if (!is_match(token("DTEND"))) return nullopt;
+        if (!is_match(token("DTEND"))) return no_match;
 
-        if (auto v = dtendparam()) ret.params = *v;
-        else return nullopt;
+        if (auto v = dtendparam(); is_match(v)) ret.params = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
-        if (auto v = dtendval()) ret.value = *v;
-        else return nullopt;
+        if (auto v = dtendval(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -3801,14 +3839,15 @@ bool IcalParser::durparam() {
 result<Duration> IcalParser::duration() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("DURATION")))
+                return no_match;
         const auto success =
-                token("DURATION") &&
                 durparam() &&
-                token(":") &&
-                dur_value() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(dur_value()) &&
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -3831,8 +3870,8 @@ bool IcalParser::attachparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         const auto success =
-                token(";") &&
-                (fmttypeparam() || other_param());
+                is_match(token(";")) &&
+                (is_match(fmttypeparam()) || is_match(other_param()));
         if (!success)
                 return false;
         ptran.commit();
@@ -3854,17 +3893,17 @@ result<Attach> IcalParser::attach() {
         save_input_pos ptran(*is);
 
         const auto match_head =
-                token("ATTACH") && attachparam();
+                is_match(token("ATTACH")) && attachparam();
         if (!match_head)
-                return nullopt;
+                return no_match;
 
         // ":" uri
         {
                 save_input_pos ptran_uri(*is);
                 const auto match_uri =
-                        token(":") &&
-                        uri() &&
-                        newline() ;
+                        is_match(token(":")) &&
+                        is_match(uri()) &&
+                        is_match(newline()) ;
                 if (match_uri) {
                         ptran_uri.commit();
                         ptran.commit();
@@ -3876,17 +3915,17 @@ result<Attach> IcalParser::attach() {
         {
                 save_input_pos ptran_enc(*is);
                 const auto match_enc =
-                        token(";") &&
-                        token("ENCODING") &&
-                        token("=") &&
-                        token("BASE64") &&
-                        token(";") &&
-                        token("VALUE") &&
-                        token("=") &&
-                        token("BINARY") &&
-                        token(":") &&
+                        is_match(token(";")) &&
+                        is_match(token("ENCODING")) &&
+                        is_match(token("=")) &&
+                        is_match(token("BASE64")) &&
+                        is_match(token(";")) &&
+                        is_match(token("VALUE")) &&
+                        is_match(token("=")) &&
+                        is_match(token("BINARY")) &&
+                        is_match(token(":")) &&
                         binary() &&
-                        newline() ;
+                        is_match(newline()) ;
                 if (match_enc) {
                         ptran_enc.commit();
                         ptran.commit();
@@ -3894,7 +3933,7 @@ result<Attach> IcalParser::attach() {
                 }
         }
 
-        return nullopt;
+        return SYNTAX_ERROR("");
 }
 //       attparam   = *(
 //                  ;
@@ -3925,14 +3964,15 @@ bool IcalParser::attparam() {
 result<Attendee> IcalParser::attendee() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("ATTENDEE")))
+                return no_match;
         const auto match =
-                token("ATTENDEE") &&
                 attparam() &&
-                token(":") &&
-                cal_address() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(cal_address()) &&
+                is_match(newline());
         if (!match)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -3953,13 +3993,13 @@ result<CatParams> IcalParser::catparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         CatParams ret;
-        while (token(";")) {
-                if (auto v = languageparam()) {
+        while (is_match(token(";"))) {
+                if (auto v = languageparam(); is_match(v)) {
                         ret.language = *v;
-                } else if (auto v = other_param()) {
+                } else if (auto v = other_param(); is_match(v)) {
                         ret.params.push_back(*v);
                 } else {
-                        return nullopt;
+                        return no_match;
                 }
         }
         ptran.commit();
@@ -3972,22 +4012,22 @@ result<Categories> IcalParser::categories () {
         save_input_pos ptran(*is);
         Categories ret;
 
-        if (!is_match(token("CATEGORIES"))) return nullopt;
+        if (!is_match(token("CATEGORIES"))) return no_match;
 
-        if (auto v = catparam()) ret.params = *v;
-        else return nullopt;
+        if (auto v = catparam(); is_match(v)) ret.params = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");;
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");;
 
-        if (auto v = text()) ret.values.push_back(*v);
-        else return nullopt;
+        if (auto v = text(); is_match(v)) ret.values.push_back(*v);
+        else return SYNTAX_ERROR("");
 
-        while (token(",")) {
-                if (auto v = text()) ret.values.push_back(*v);
-                else return nullopt;
+        while (is_match(token(","))) {
+                if (auto v = text(); is_match(v)) ret.values.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -4009,11 +4049,11 @@ result<Categories> IcalParser::categories () {
 bool IcalParser::commparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        while (token(";")) {
+        while (is_match(token(";"))) {
                 const auto match =
-                        altrepparam() ||
-                        languageparam() ||
-                        other_param();
+                        is_match(altrepparam()) ||
+                        is_match(languageparam()) ||
+                        is_match(other_param());
                 if (!match)
                         return false;
         }
@@ -4024,14 +4064,15 @@ bool IcalParser::commparam() {
 result<Comment> IcalParser::comment() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("COMMENT")))
+                return no_match;
         const auto match =
-                token("COMMENT") &&
                 commparam() &&
-                token(":") &&
-                text() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(text()) &&
+                is_match(newline());
         if (!match)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4052,11 +4093,11 @@ result<Comment> IcalParser::comment() {
 bool IcalParser::contparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        while (token(";")) {
+        while (is_match(token(";"))) {
                 const auto match =
-                        altrepparam() ||
-                        languageparam() ||
-                        other_param();
+                        is_match(altrepparam()) ||
+                        is_match(languageparam()) ||
+                        is_match(other_param());
                 if (!match)
                         return false;
         }
@@ -4067,14 +4108,15 @@ bool IcalParser::contparam() {
 result<Contact> IcalParser::contact() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("CONTACT")))
+                return no_match;
         const auto match =
-                token("CONTACT") &&
                 contparam() &&
-                token(":") &&
-                text() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(text()) &&
+                is_match(newline());
         if (!match)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4113,19 +4155,22 @@ bool IcalParser::exdtparam() {
 result<ExDate> IcalParser::exdate() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("EXDATE")))
+                return no_match;
+
         const auto match =
-                token("EXDATE") &&
                 exdtparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 exdtval();
         if (!match)
-                return nullopt;
-        while (token(",")) {
+                return SYNTAX_ERROR("");
+
+        while (is_match(token(","))) {
                 if (!exdtval())
-                        return nullopt;
+                        return SYNTAX_ERROR("");
         }
-        if (!newline())
-                return nullopt;
+        if (!is_match(newline()))
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4136,7 +4181,7 @@ result<ExDate> IcalParser::exdate() {
 bool IcalParser::extdata() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        if (!text())
+        if (!is_match(text()))
                 return false;
         ptran.commit();
         return true;
@@ -4147,7 +4192,7 @@ bool IcalParser::extdata() {
 bool IcalParser::statdesc() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        if (!text())
+        if (!is_match(text()))
                 return false;
         ptran.commit();
         return true;
@@ -4179,10 +4224,10 @@ bool IcalParser::statcode() {
 bool IcalParser::rstatparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        while (token(";")) {
+        while (is_match(token(";"))) {
                 const auto match =
-                        languageparam() ||
-                        other_param();
+                        is_match(languageparam()) ||
+                        is_match(other_param());
                 if (!match)
                         return false;
         }
@@ -4195,16 +4240,17 @@ bool IcalParser::rstatparam() {
 result<RStatus> IcalParser::rstatus() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("REQUEST-STATUS")))
+                return no_match;
         const auto success =
-                token("REQUEST-STATUS") &&
                 rstatparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 statcode() &&
-                token(";") &&
+                is_match(token(";")) &&
                 statdesc() &&
-                (token(";") ? extdata() : true);
+                (is_match(token(";")) ? extdata() : true);
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4222,7 +4268,7 @@ result<RelTypeParam> IcalParser::reltypeparam() {
         RelTypeParam ret;
 
         if (!is_match(token("RELTYPE"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = token("PARENT"); is_match(v)) {
                 ret.value = *v;
@@ -4235,7 +4281,7 @@ result<RelTypeParam> IcalParser::reltypeparam() {
         } else if (auto v = x_name(); is_match(v)) {
                 ret.value = *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -4258,10 +4304,10 @@ result<RelTypeParam> IcalParser::reltypeparam() {
 bool IcalParser::relparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        while (token(";")) {
+        while (is_match(token(";"))) {
                 const auto match =
-                        reltypeparam() ||
-                        other_param();
+                        is_match(reltypeparam()) ||
+                        is_match(other_param());
                 if (!match)
                         return false;
         }
@@ -4272,14 +4318,15 @@ bool IcalParser::relparam() {
 result<Related> IcalParser::related() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("RELATED-TO")))
+                return no_match;
         const auto success =
-                token("RELATED-TO") &&
                 relparam() &&
-                token(":") &&
-                text() &&
-                newline();
+                is_match(token(":")) &&
+                is_match(text()) &&
+                is_match(newline());
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4308,19 +4355,20 @@ bool IcalParser::resrcparam() {
 result<Resources> IcalParser::resources() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("RESOURCES")))
+                return no_match;
         const auto success =
-                token("RESOURCES") &&
                 resrcparam() &&
-                token(":") &&
-                text();
+                is_match(token(":")) &&
+                is_match(text());
         if (!success)
-                return nullopt;
-        while (token(",")) {
-                if (!text())
-                        return nullopt;
+                return SYNTAX_ERROR("");
+        while (is_match(token(","))) {
+                if (!is_match(text()))
+                        return SYNTAX_ERROR("");
         }
-        if (!newline())
-                return nullopt;
+        if (!is_match(newline()))
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4328,7 +4376,9 @@ result<Resources> IcalParser::resources() {
 //       ;Value MUST match value type
 bool IcalParser::rdtval() {
         CALLSTACK;
-        return date_time() || date() || period();
+        return is_match(date_time()) ||
+               is_match(date()) ||
+               period();
 }
 //       rdtparam   = *(
 //                  ;
@@ -4350,12 +4400,12 @@ bool IcalParser::rdtparam_single() {
         {
                 save_input_pos ptran(*is);
                 const auto match =
-                        token(";") &&
-                        token("VALUE") &&
-                        token("=") &&
+                        is_match(token(";")) &&
+                        is_match(token("VALUE")) &&
+                        is_match(token("=")) &&
                         (
-                                date_time() ||
-                                date() ||
+                                is_match(date_time()) ||
+                                is_match(date()) ||
                                 period()
                         );
                 if (match) {
@@ -4367,8 +4417,8 @@ bool IcalParser::rdtparam_single() {
         {
                 save_input_pos ptran(*is);
                 const auto match =
-                        token(";") &&
-                        tzidparam();
+                        is_match(token(";")) &&
+                        is_match(tzidparam());
                 if (match) {
                         ptran.commit();
                         return true;
@@ -4378,8 +4428,8 @@ bool IcalParser::rdtparam_single() {
         {
                 save_input_pos ptran(*is);
                 const auto match =
-                        token(";") &&
-                        other_param();
+                        is_match(token(";")) &&
+                        is_match(other_param());
                 if (match) {
                         ptran.commit();
                         return true;
@@ -4399,19 +4449,20 @@ bool IcalParser::rdtparam() {
 result<RDate> IcalParser::rdate() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(token("RDATE")))
+                return no_match;
         const auto success =
-                token("RDATE") &&
                 rdtparam() &&
-                token(":") &&
+                is_match(token(":")) &&
                 rdtval();
         if (!success)
-                return nullopt;
-        while (token(",")) {
+                return SYNTAX_ERROR("");
+        while (is_match(token(","))) {
                 if (!rdtval())
-                        return nullopt;
+                        return SYNTAX_ERROR("");
         }
-        if (!newline())
-                return nullopt;
+        if (!is_match(newline()))
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
 }
@@ -4480,45 +4531,45 @@ result<EventProp> IcalParser::eventprop_single() {
         CALLSTACK;
         save_input_pos ptran(*is);
         EventProp ret;
-        if (auto v = dtstamp()) ret = *v;
-        else if (auto v = uid()) ret = *v;
+        if (auto v = dtstamp(); is_match(v)) ret = *v;
+        else if (auto v = uid(); is_match(v)) ret = *v;
 
-        else if (auto v = dtstart()) ret = *v;
+        else if (auto v = dtstart(); is_match(v)) ret = *v;
 
-        else if (auto v = class_()) ret = *v;
-        else if (auto v = created()) ret = *v;
-        else if (auto v = description()) ret = *v;
-        else if (auto v = geo()) ret = *v;
-        else if (auto v = last_mod()) ret = *v;
-        else if (auto v = location()) ret = *v;
-        else if (auto v = organizer()) ret = *v;
-        else if (auto v = priority()) ret = *v;
-        else if (auto v = seq()) ret = *v;
-        else if (auto v = status()) ret = *v;
-        else if (auto v = summary()) ret = *v;
-        else if (auto v = transp()) ret = *v;
-        else if (auto v = url()) ret = *v;
-        else if (auto v = recurid()) ret = *v;
+        else if (auto v = class_(); is_match(v)) ret = *v;
+        else if (auto v = created(); is_match(v)) ret = *v;
+        else if (auto v = description(); is_match(v)) ret = *v;
+        else if (auto v = geo(); is_match(v)) ret = *v;
+        else if (auto v = last_mod(); is_match(v)) ret = *v;
+        else if (auto v = location(); is_match(v)) ret = *v;
+        else if (auto v = organizer(); is_match(v)) ret = *v;
+        else if (auto v = priority(); is_match(v)) ret = *v;
+        else if (auto v = seq(); is_match(v)) ret = *v;
+        else if (auto v = status(); is_match(v)) ret = *v;
+        else if (auto v = summary(); is_match(v)) ret = *v;
+        else if (auto v = transp(); is_match(v)) ret = *v;
+        else if (auto v = url(); is_match(v)) ret = *v;
+        else if (auto v = recurid(); is_match(v)) ret = *v;
 
-        else if (auto v = rrule()) ret = *v;
+        else if (auto v = rrule(); is_match(v)) ret = *v;
 
-        else if (auto v = dtend()) ret = *v;
-        else if (auto v = duration()) ret = *v;
+        else if (auto v = dtend(); is_match(v)) ret = *v;
+        else if (auto v = duration(); is_match(v)) ret = *v;
 
-        else if (auto v = attach()) ret = *v;
-        else if (auto v = attendee()) ret = *v;
-        else if (auto v = categories ()) ret = *v;
-        else if (auto v = comment()) ret = *v;
-        else if (auto v = contact()) ret = *v;
-        else if (auto v = exdate()) ret = *v;
-        else if (auto v = rstatus()) ret = *v;
-        else if (auto v = related()) ret = *v;
-        else if (auto v = resources()) ret = *v;
-        else if (auto v = rdate()) ret = *v;
-        else if (auto v = x_prop()) ret = *v;
-        else if (auto v = iana_prop()) ret = *v;
+        else if (auto v = attach(); is_match(v)) ret = *v;
+        else if (auto v = attendee(); is_match(v)) ret = *v;
+        else if (auto v = categories (); is_match(v)) ret = *v;
+        else if (auto v = comment(); is_match(v)) ret = *v;
+        else if (auto v = contact(); is_match(v)) ret = *v;
+        else if (auto v = exdate(); is_match(v)) ret = *v;
+        else if (auto v = rstatus(); is_match(v)) ret = *v;
+        else if (auto v = related(); is_match(v)) ret = *v;
+        else if (auto v = resources(); is_match(v)) ret = *v;
+        else if (auto v = rdate(); is_match(v)) ret = *v;
+        else if (auto v = x_prop(); is_match(v)) ret = *v;
+        else if (auto v = iana_prop(); is_match(v)) ret = *v;
 
-        else return nullopt;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -4527,7 +4578,7 @@ result<vector<EventProp>> IcalParser::eventprop() {
         CALLSTACK;
         save_input_pos ptran(*is);
         vector<EventProp> ret;
-        while (auto v = eventprop_single()) {
+        for (auto v = eventprop_single(); is_match(v); v = eventprop_single()) {
                 ret.push_back(*v);
         }
 
@@ -4543,16 +4594,18 @@ result<EventComp> IcalParser::eventc() {
         save_input_pos ptran(*is);
         EventComp ret;
 
-        if (!key_value_newline("BEGIN", "VEVENT")) return nullopt;
+        if (!is_match(key_value_newline("BEGIN", "VEVENT")))
+                return no_match;
 
-        if (auto v = eventprop()) ret.properties = *v;
-        else return nullopt;
+        if (auto v = eventprop(); is_match(v)) ret.properties = *v;
+        else return SYNTAX_ERROR("");
 
-        while(auto v = alarmc()) {
+        for (auto v = alarmc(); is_match(v); v = alarmc()) {
                 ret.alarms.push_back(*v);
         }
 
-        if (!key_value_newline("END", "VEVENT")) return nullopt;
+        if (!is_match(key_value_newline("END", "VEVENT")))
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -4607,19 +4660,22 @@ bool IcalParser::todoprop() {
 result<TodoComp> IcalParser::todoc() {
         CALLSTACK;
         save_input_pos ptran(*is);
+
+        if (!is_match(key_value_newline("BEGIN", "VTODO")))
+                return no_match;
+
         const auto success_pro =
-                key_value_newline("BEGIN", "VTODO") &&
                 todoprop();
         if (!success_pro)
-                return nullopt;
+                return SYNTAX_ERROR("");
 
-        while(alarmc()) {
+        while(is_match(alarmc())) {
         }
 
         const auto success_epi =
-                key_value_newline("END", "VTODO") ;
+                is_match(key_value_newline("END", "VTODO"));
         if (!success_epi)
-                return nullopt;
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         NOT_IMPLEMENTED;
@@ -4664,12 +4720,13 @@ bool IcalParser::jourprop() {
 result<JournalComp> IcalParser::journalc() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (is_match(key_value_newline("BEGIN", "VJOURNAL")))
+                return no_match;
         const auto success =
-                key_value_newline("BEGIN", "VJOURNAL") &&
                 jourprop() &&
-                        key_value_newline("END", "VJOURNAL") ;
+                is_match(key_value_newline("END", "VJOURNAL"));
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
         ptran.commit();
         NOT_IMPLEMENTED;
         //return true;
@@ -4706,12 +4763,15 @@ bool IcalParser::fbprop() {
 result<FreeBusyComp> IcalParser::freebusyc() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        if (!is_match(key_value_newline("BEGIN", "VFREEBUSY")))
+                return no_match;
+
         const auto success =
-                key_value_newline("BEGIN", "VFREEBUSY") &&
                 fbprop() &&
-                        key_value_newline("END", "VFREEBUSY") ;
+                is_match(key_value_newline("END", "VFREEBUSY"));
         if (!success)
-                return nullopt;
+                return SYNTAX_ERROR("");
+
         ptran.commit();
         NOT_IMPLEMENTED;
         //return true;
@@ -4723,8 +4783,9 @@ result<TzIdPropParam> IcalParser::tzidpropparam() {
         save_input_pos ptran(*is);
         TzIdPropParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -4736,19 +4797,19 @@ result<TzId> IcalParser::tzid() {
         save_input_pos ptran(*is);
         TzId ret;
 
-        if (!is_match(token("TZID"))) return nullopt;
+        if (!is_match(token("TZID"))) return no_match;
 
         if (auto v = tzidpropparam(); is_match(v)) ret.propParams = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");; // error
 
-        if (auto v = tzidprefix()) ret.prefix = *v;
+        if (auto v = tzidprefix(); is_match(v)) ret.prefix = *v;
 
-        if (auto v = text()) ret.text = *v;
-        else return PARSING_ERROR("");
+        if (auto v = text(); is_match(v)) ret.text = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -4760,8 +4821,9 @@ result<TzUrlParam> IcalParser::tzurlparam() {
         save_input_pos ptran(*is);
         TzUrlParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.params.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -4773,17 +4835,17 @@ result<TzUrl> IcalParser::tzurl() {
         save_input_pos ptran(*is);
         TzUrl ret;
 
-        if (!is_match(token("TZURL"))) return nullopt;
+        if (!is_match(token("TZURL"))) return no_match;
 
         if (auto v = tzurlparam(); is_match(v)) ret.params = *v;
-        else return nullopt;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");; // error
 
         if (auto v = uri(); is_match(v)) ret.uri = *v;
-        else return PARSING_ERROR("");
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR("");
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -4795,8 +4857,9 @@ result<FrmParam> IcalParser::frmparam() {
         save_input_pos ptran(*is);
         FrmParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v))
+                        ret.otherParams.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -4808,8 +4871,8 @@ result<ToParam> IcalParser::toparam() {
         save_input_pos ptran(*is);
         ToParam ret;
         while (is_match(token(";"))) {
-                if (auto v = other_param(); is_match(v)) ret.push_back(*v);
-                else return PARSING_ERROR("");
+                if (auto v = other_param(); is_match(v)) ret.otherParams.push_back(*v);
+                else return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -4821,17 +4884,17 @@ result<TimeNumZone> IcalParser::time_numzone() {
         save_input_pos ptran(*is);
         TimeNumZone ret;
 
-        if (token("+")) ret.sign = +1;
-        else if (token("-")) ret.sign = -1;
-        else return nullopt;
+        if (is_match(token("+"))) ret.sign = +1;
+        else if (is_match(token("-"))) ret.sign = -1;
+        else return no_match;
 
-        if (auto v = time_hour()) ret.hour = *v;
-        else return PARSING_ERROR("");
+        if (auto v = time_hour(); is_match(v)) ret.hour = *v;
+        else return no_match;
 
-        if (auto v = time_minute()) ret.minute = *v;
-        else return PARSING_ERROR("");
+        if (auto v = time_minute(); is_match(v)) ret.minute = *v;
+        else return no_match;
 
-        if (auto v = time_second()) ret.second = *v;
+        if (auto v = time_second(); is_match(v)) ret.second = *v;
 
         ptran.commit();
         return ret;
@@ -4843,8 +4906,8 @@ result<UtcOffset> IcalParser::utc_offset() {
         save_input_pos ptran(*is);
         UtcOffset ret;
 
-        if (auto v = time_numzone()) ret.numZone = *v;
-        else return nullopt;
+        if (auto v = time_numzone(); is_match(v)) ret.numZone = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;
@@ -4856,17 +4919,17 @@ result<TzOffsetTo> IcalParser::tzoffsetto() {
         save_input_pos ptran(*is);
         TzOffsetTo ret;
 
-        if (!is_match(token("TZOFFSETTO"))) return nullopt;
+        if (!is_match(token("TZOFFSETTO"))) return no_match;
 
-        if (auto v = toparam()) ret.param = *v;
-        else return PARSING_ERROR("");
+        if (auto v = toparam(); is_match(v)) ret.param = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");; // error
 
-        if (auto v = utc_offset()) ret.utcOffset = *v;
-        else return PARSING_ERROR("");
+        if (auto v = utc_offset(); is_match(v)) ret.utcOffset = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR(""); // error
 
         ptran.commit();
         return ret;
@@ -4878,17 +4941,17 @@ result<TzOffsetFrom> IcalParser::tzoffsetfrom() {
         save_input_pos ptran(*is);
         TzOffsetFrom ret;
 
-        if (!is_match(token("TZOFFSETFROM"))) return nullopt;
+        if (!is_match(token("TZOFFSETFROM"))) return no_match;
 
-        if (auto v = frmparam()) ret.param = *v;
-        else return PARSING_ERROR("");
+        if (auto v = frmparam(); is_match(v)) ret.param = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");; // error
 
-        if (auto v = utc_offset()) ret.utcOffset = *v;
-        else return PARSING_ERROR("");
+        if (auto v = utc_offset(); is_match(v)) ret.utcOffset = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR(""); // error
 
         ptran.commit();
         return ret;
@@ -4913,8 +4976,10 @@ result<TzNParam> IcalParser::tznparam() {
         TzNParam ret;
 
         while (true) {
-                if (auto v = languageparam()) ret.languageParam = *v;
-                else if (auto v = other_param()) ret.otherParams.push_back(*v);
+                if (auto v = languageparam(); is_match(v))
+                        ret.languageParam = *v;
+                else if (auto v = other_param(); is_match(v))
+                        ret.otherParams.push_back(*v);
                 else break;
         }
 
@@ -4928,17 +4993,17 @@ result<TzName> IcalParser::tzname() {
         save_input_pos ptran(*is);
         TzName ret;
 
-        if (!is_match(token("TZNAME"))) return nullopt;
+        if (!is_match(token("TZNAME"))) return no_match;
 
-        if (auto v = tznparam()) ret.param = *v;
-        else return PARSING_ERROR("");
+        if (auto v = tznparam(); is_match(v)) ret.param = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(token(":"))) return PARSING_ERROR("");; // error
+        if (!is_match(token(":"))) return SYNTAX_ERROR("");
 
-        if (auto v = text()) ret.text = *v;
-        else return PARSING_ERROR("");
+        if (auto v = text(); is_match(v)) ret.text = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!is_match(newline())) return PARSING_ERROR(""); // error
+        if (!is_match(newline())) return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -4968,15 +5033,24 @@ result<TzProp> IcalParser::tzprop() {
         TzProp ret;
 
         while (true) {
-                if (auto v = dtstart()) ret.dtStart = *v;
-                else if (auto v = tzoffsetto()) ret.offsetTo = *v;
-                else if (auto v = tzoffsetfrom()) ret.offsetFrom = *v;
-                else if (auto v = rrule()) ret.rRule = *v;
-                else if (auto v = comment()) ret.comments.push_back(*v);
-                else if (auto v = rdate()) ret.rDates.push_back(*v);
-                else if (auto v = tzname()) ret.tzNames.push_back(*v);
-                else if (auto v = x_prop()) ret.xProps.push_back(*v);
-                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
+                if (auto v = dtstart(); is_match(v))
+                        ret.dtStart = *v;
+                else if (auto v = tzoffsetto(); is_match(v))
+                        ret.offsetTo = *v;
+                else if (auto v = tzoffsetfrom(); is_match(v))
+                        ret.offsetFrom = *v;
+                else if (auto v = rrule(); is_match(v))
+                        ret.rRule = *v;
+                else if (auto v = comment(); is_match(v))
+                        ret.comments.push_back(*v);
+                else if (auto v = rdate(); is_match(v))
+                        ret.rDates.push_back(*v);
+                else if (auto v = tzname(); is_match(v))
+                        ret.tzNames.push_back(*v);
+                else if (auto v = x_prop(); is_match(v))
+                        ret.xProps.push_back(*v);
+                else if (auto v = iana_prop(); is_match(v))
+                        ret.ianaProps.push_back(*v);
                 else break;
         }
 
@@ -4992,12 +5066,14 @@ result<DaylightC> IcalParser::daylightc() {
         save_input_pos ptran(*is);
         DaylightC ret;
 
-        if (!key_value_newline("BEGIN", "DAYLIGHT")) return nullopt;
+        if (!is_match(key_value_newline("BEGIN", "DAYLIGHT")))
+                return no_match;
 
-        if (auto v = tzprop()) ret.tzProp = *v;
-        else return PARSING_ERROR("");
+        if (auto v = tzprop(); is_match(v)) ret.tzProp = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!key_value_newline("END", "DAYLIGHT")) return nullopt; // error
+        if (!is_match(key_value_newline("END", "DAYLIGHT")))
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -5011,12 +5087,14 @@ result<StandardC> IcalParser::standardc() {
         save_input_pos ptran(*is);
         StandardC ret;
 
-        if (!key_value_newline("BEGIN", "STANDARD")) return nullopt;
+        if (!is_match(key_value_newline("BEGIN", "STANDARD")))
+                return no_match;
 
-        if (auto v = tzprop()) ret.tzProp = *v;
-        else return PARSING_ERROR("");
+        if (auto v = tzprop(); is_match(v)) ret.tzProp = *v;
+        else return SYNTAX_ERROR("");
 
-        if (!key_value_newline("END", "STANDARD")) return nullopt; // error
+        if (!is_match(key_value_newline("END", "STANDARD")))
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -5052,21 +5130,29 @@ result<TimezoneComp> IcalParser::timezonec() {
         save_input_pos ptran(*is);
         TimezoneComp ret;
 
-        if (!key_value_newline("BEGIN", "VTIMEZONE")) return nullopt;
+        if (!is_match(key_value_newline("BEGIN", "VTIMEZONE")))
+                return no_match;
 
         while (true) {
-                if (auto v = tzid()) ret.tzId = *v;
-                else if (auto v = last_mod()) ret.lastMod = *v;
-                else if (auto v = tzurl()) ret.tzUrl = *v;
-                else if (auto v = standardc()) ret.observance = *v;
-                else if (auto v = daylightc()) ret.observance = *v;
-                else if (auto v = x_prop()) ret.xProps.push_back(*v);
-                else if (auto v = iana_prop()) ret.ianaProps.push_back(*v);
+                if (auto v = tzid(); is_match(v))
+                        ret.tzId = *v;
+                else if (auto v = last_mod(); is_match(v))
+                        ret.lastMod = *v;
+                else if (auto v = tzurl(); is_match(v))
+                        ret.tzUrl = *v;
+                else if (auto v = standardc(); is_match(v))
+                        ret.observance = *v;
+                else if (auto v = daylightc(); is_match(v))
+                        ret.observance = *v;
+                else if (auto v = x_prop(); is_match(v))
+                        ret.xProps.push_back(*v);
+                else if (auto v = iana_prop(); is_match(v))
+                        ret.ianaProps.push_back(*v);
                 else break;
         }
 
-        if (!key_value_newline("END", "VTIMEZONE")) {
-                return nullopt; // error
+        if (!is_match(key_value_newline("END", "VTIMEZONE"))) {
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5079,26 +5165,27 @@ result<TimezoneComp> IcalParser::timezonec() {
 result<IanaComp> IcalParser::iana_comp() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        const auto success_pro =
-                token("BEGIN") &&
-                token(":") &&
-                iana_token() &&
-                newline();
-        if (!success_pro)
-                return nullopt;
 
-        if (!contentline())
-                return nullopt;
-        while(contentline()) {
+        const auto success_pro =
+                is_match(token("BEGIN")) &&
+                is_match(token(":")) &&
+                is_match(iana_token()) &&
+                is_match(newline());
+        if (!success_pro)
+                return no_match;
+
+        if (!is_match(contentline()))
+                return SYNTAX_ERROR("");
+        while(is_match(contentline())) {
         }
 
         const auto success_epi =
-                token("END") &&
-                token(":") &&
-                iana_token() &&
-                newline();
+                is_match(token("END")) &&
+                is_match(token(":")) &&
+                is_match(iana_token()) &&
+                is_match(newline());
         if (!success_epi)
-                return nullopt;
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         NOT_IMPLEMENTED;
@@ -5112,25 +5199,25 @@ result<XComp> IcalParser::x_comp() {
         CALLSTACK;
         save_input_pos ptran(*is);
         const auto success_pro =
-                token("BEGIN") &&
-                token(":") &&
-                x_name() &&
-                newline();
+                is_match(token("BEGIN")) &&
+                is_match(token(":")) &&
+                is_match(x_name()) &&
+                is_match(newline());
         if (!success_pro)
-                return nullopt;
+                return no_match;
 
-        if (!contentline())
-                return nullopt;
-        while(contentline()) {
+        if (!is_match(contentline()))
+                return SYNTAX_ERROR("");
+        while(is_match(contentline())) {
         }
 
         const auto success_epi =
-                token("END") &&
-                token(":") &&
-                x_name() &&
-                newline();
+                is_match(token("END")) &&
+                is_match(token(":")) &&
+                is_match(x_name()) &&
+                is_match(newline());
         if (!success_epi)
-                return nullopt;
+                return SYNTAX_ERROR("");
 
         ptran.commit();
         NOT_IMPLEMENTED;
@@ -5144,13 +5231,13 @@ result<Component> IcalParser::component_single() {
         CALLSTACK;
         save_input_pos ptran(*is);
         Component ret;
-        if (auto v = eventc()) ret = *v;
-        else if (auto v = todoc()) ret = *v;
-        else if (auto v = journalc()) ret = *v;
-        else if (auto v = freebusyc()) ret = *v;
-        else if (auto v = timezonec()) ret = *v;
-        else if (auto v = iana_comp()) ret = *v;
-        else if (auto v = x_comp()) ret = *v;
+        if (auto v = eventc(); is_match(v)) ret = *v;
+        else if (auto v = todoc(); is_match(v)) ret = *v;
+        else if (auto v = journalc(); is_match(v)) ret = *v;
+        else if (auto v = freebusyc(); is_match(v)) ret = *v;
+        else if (auto v = timezonec(); is_match(v)) ret = *v;
+        else if (auto v = iana_comp(); is_match(v)) ret = *v;
+        else if (auto v = x_comp(); is_match(v)) ret = *v;
         else return no_match;
         ptran.commit();
         return ret;
@@ -5172,24 +5259,32 @@ result<vector<Component>> IcalParser::component() {
 result<AltRepParam> IcalParser::altrepparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        AltRepParam ret;
+
         if (!is_match(token("ALTREP"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
-        const auto v = quoted_string();
-        if (!is_match(v)) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
+
+        if (auto v = quoted_string(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
+
         ptran.commit();
-        return {{*v}};
+        return ret;
 }
 
 // cnparam    = "CN" "=" param-value
 result<CnParam> IcalParser::cnparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
+        CnParam ret;
+
         if (!is_match(token("CN"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
-        const auto v = param_value();
-        if (!is_match(v)) return nullopt;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
+
+        if (auto v = param_value(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
+
         ptran.commit();
-        return {{*v}};
+        return ret;
 }
 
 //      cutypeparam        = "CUTYPE" "="
@@ -5205,21 +5300,22 @@ result<CnParam> IcalParser::cnparam() {
 result<CuTypeParam> IcalParser::cutypeparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
-        if (!is_match(token("CUTYPE"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        CuTypeParam ret;
 
-        string val;
-        if (auto v = token("INDIVIDUAL"); is_match(v)) val = *v;
-        else if (auto v = token("GROUP"); is_match(v)) val = *v;
-        else if (auto v = token("RESOURCE"); is_match(v)) val = *v;
-        else if (auto v = token("ROOM"); is_match(v)) val = *v;
-        else if (auto v = token("UNKNOWN"); is_match(v)) val = *v;
-        else if (auto v = x_name(); is_match(v)) val = *v;
-        else if (auto v = iana_token(); is_match(v)) val = *v;
-        else return PARSING_ERROR("");
+        if (!is_match(token("CUTYPE"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
+
+        if (auto v = token("INDIVIDUAL"); is_match(v)) ret.value = *v;
+        else if (auto v = token("GROUP"); is_match(v)) ret.value = *v;
+        else if (auto v = token("RESOURCE"); is_match(v)) ret.value = *v;
+        else if (auto v = token("ROOM"); is_match(v)) ret.value = *v;
+        else if (auto v = token("UNKNOWN"); is_match(v)) ret.value = *v;
+        else if (auto v = x_name(); is_match(v)) ret.value = *v;
+        else if (auto v = iana_token(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
-        return {{val}};
+        return ret;
 }
 
 //      delfromparam       = "DELEGATED-FROM" "=" DQUOTE cal-address DQUOTE
@@ -5230,18 +5326,18 @@ result<DelFromParam> IcalParser::delfromparam() {
         DelFromParam ret;
 
         if (!is_match(token("DELEGATED-FROM"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = quoted_string(); is_match(v)) {
                 ret.values.push_back(*v);
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         while (is_match(token(","))) {
                 if (auto v = quoted_string(); is_match(v)) {
                         ret.values.push_back(*v);
                 } else {
-                        return PARSING_ERROR("");
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -5256,18 +5352,18 @@ result<DelToParam> IcalParser::deltoparam() {
         DelToParam ret;
 
         if (!is_match(token("DELEGATED-TO"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = quoted_string(); is_match(v)) {
                 ret.values.push_back(*v);
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         while (is_match(token(","))) {
                 if (auto v = quoted_string(); is_match(v)) {
                         ret.values.push_back(*v);
                 } else {
-                        return PARSING_ERROR("");
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -5281,12 +5377,12 @@ result<DirParam> IcalParser::dirparam() {
         DirParam ret;
 
         if (!is_match(token("DIR"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = quoted_string(); is_match(v)) {
                 ret.value = *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5302,14 +5398,14 @@ result<EncodingParam> IcalParser::encodingparam() {
         save_input_pos ptran(*is);
         EncodingParam ret;
         if (!is_match(token("ENCODING"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = token("8BIT"); is_match(v)) {
                 ret.value = *v;
         } else if (auto v = token("BASE64"); is_match(v)) {
                 ret.value = *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5324,14 +5420,14 @@ result<FmtTypeParam> IcalParser::fmttypeparam() {
         FmtTypeParam ret;
 
         if (!is_match(token("FMTTYPE"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = read_type_name(*is); is_match(v)) {
+        if (auto v = read_type_name(*is)) {
                 ret.value = *v;
-        } else if (auto v = read_subtype_name(*is); is_match(v)) {
+        } else if (auto v = read_subtype_name(*is)) {
                 ret.value = *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5352,7 +5448,7 @@ result<FbTypeParam> IcalParser::fbtypeparam() {
         save_input_pos ptran(*is);
         FbTypeParam ret;
         if (!is_match(token("FBTYPE"))) return no_match;
-        if (!is_match(token("="))) return PARSING_ERROR("");
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = token("FREE"); is_match(v)) {
                 ret.value = *v;
@@ -5367,7 +5463,7 @@ result<FbTypeParam> IcalParser::fbtypeparam() {
         } else if (auto v = iana_token(); is_match(v)) {
                 ret.value = *v;
         } else {
-                return PARSING_ERROR("");
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5381,13 +5477,13 @@ result<LanguageParam> IcalParser::languageparam() {
         CALLSTACK;
         save_input_pos ptran(*is);
         LanguageParam ret;
-        if (!token("LANGUAGE")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("LANGUAGE"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         if (auto v = read_language_tag(*is)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5400,19 +5496,19 @@ result<MemberParam> IcalParser::memberparam() {
         save_input_pos ptran(*is);
         MemberParam ret;
 
-        if (!token("MEMBER")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("MEMBER"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = cal_address()) {
+        if (auto v = cal_address(); is_match(v)) {
                 ret.values.push_back(*v);
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
-        while (token(",")) {
-                if (auto v = cal_address()) {
+        while (is_match(token(","))) {
+                if (auto v = cal_address(); is_match(v)) {
                         ret.values.push_back(*v);
                 } else {
-                        return nullopt;
+                        return SYNTAX_ERROR("");
                 }
         }
         ptran.commit();
@@ -5480,17 +5576,17 @@ result<PartStatParam> IcalParser::partstatparam() {
         save_input_pos ptran(*is);
         PartStatParam ret;
 
-        if (!token("PARTSTAT")) return result<PartStatParam>();
-        if (!token("=")) return result<PartStatParam>();
+        if (!is_match(token("PARTSTAT"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = partstat_event()) {
+        if (auto v = partstat_event(); is_match(v)) {
                 ret = *v;
-        } else if (auto v = partstat_todo()) {
+        } else if (auto v = partstat_todo(); is_match(v)) {
                 ret = *v;
-        } else if (auto v = partstat_jour()) {
+        } else if (auto v = partstat_jour(); is_match(v)) {
                 ret = *v;
         } else {
-                return result<PartStatParam>();
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5504,13 +5600,13 @@ result<RangeParam> IcalParser::rangeparam() {
         save_input_pos ptran(*is);
         RangeParam ret;
 
-        if (!token("RANGE")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("RANGE"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = token("THISANDFUTURE")) {
+        if (auto v = token("THISANDFUTURE"); is_match(v)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5525,15 +5621,15 @@ result<TrigRelParam> IcalParser::trigrelparam() {
         save_input_pos ptran(*is);
         TrigRelParam ret;
 
-        if (!token("RELATED")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("RELATED"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = token("START")) {
+        if (auto v = token("START"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = token("END")) {
+        } else if (auto v = token("END"); is_match(v)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5557,23 +5653,23 @@ result<RoleParam> IcalParser::roleparam() {
         save_input_pos ptran(*is);
         RoleParam ret;
 
-        if (!token("ROLE")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("ROLE"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = token("CHAIR")) {
+        if (auto v = token("CHAIR"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = token("REQ-PARTICIPANT")) {
+        } else if (auto v = token("REQ-PARTICIPANT"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = token("OPT-PARTICIPANT")) {
+        } else if (auto v = token("OPT-PARTICIPANT"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = token("NON-PARTICIPANT")) {
+        } else if (auto v = token("NON-PARTICIPANT"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = x_name()) {
+        } else if (auto v = x_name(); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = iana_token()) {
+        } else if (auto v = iana_token(); is_match(v)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
         ptran.commit();
         return ret;
@@ -5586,15 +5682,15 @@ result<RsvpParam> IcalParser::rsvpparam() {
         save_input_pos ptran(*is);
         RsvpParam ret;
 
-        if (!token("RSVP")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("RSVP"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = token("TRUE")) {
+        if (auto v = token("TRUE"); is_match(v)) {
                 ret.value = *v;
-        } else if (auto v = token("FALSE")) {
+        } else if (auto v = token("FALSE"); is_match(v)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5607,13 +5703,13 @@ result<SentByParam> IcalParser::sentbyparam() {
         save_input_pos ptran(*is);
         SentByParam ret;
 
-        if (!token("SENT-BY")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("SENT-BY"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = quoted_string()) {
+        if (auto v = quoted_string(); is_match(v)) {
                 ret.value = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5626,8 +5722,8 @@ result<TzIdPrefix> IcalParser::tzidprefix() {
         save_input_pos ptran(*is);
         TzIdPrefix ret;
 
-        if (auto v = token("/")) ret.value = *v;
-        else return nullopt;
+        if (auto v = token("/"); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -5639,17 +5735,17 @@ result<TzIdParam> IcalParser::tzidparam() {
         save_input_pos ptran(*is);
         TzIdParam ret;
 
-        if (!token("TZID")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("TZID"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = tzidprefix()) {
+        if (auto v = tzidprefix(); is_match(v)) {
                 ret.prefix = *v;
         }
 
-        if (auto v = paramtext()) {
+        if (auto v = paramtext(); is_match(v)) {
                 ret.paramtext = *v;
         } else {
-                return nullopt;
+                return SYNTAX_ERROR("");
         }
 
         ptran.commit();
@@ -5676,23 +5772,29 @@ result<TzIdParam> IcalParser::tzidparam() {
 //                  ; Some other IANA-registered iCalendar value type.
 result<ValueType> IcalParser::valuetype() {
         CALLSTACK;
-        if (auto v = token("BINARY")) return {{*v}};
-        if (auto v = token("BOOLEAN")) return {{*v}};
-        if (auto v = token("CAL-ADDRESS")) return {{*v}};
-        if (auto v = token("DATE")) return {{*v}};
-        if (auto v = token("DATE-TIME")) return {{*v}};
-        if (auto v = token("DURATION")) return {{*v}};
-        if (auto v = token("FLOAT")) return {{*v}};
-        if (auto v = token("INTEGER")) return {{*v}};
-        if (auto v = token("PERIOD")) return {{*v}};
-        if (auto v = token("RECUR")) return {{*v}};
-        if (auto v = token("TEXT")) return {{*v}};
-        if (auto v = token("TIME")) return {{*v}};
-        if (auto v = token("URI")) return {{*v}};
-        if (auto v = token("UTC-OFFSET")) return {{*v}};
-        if (auto v = x_name()) return {{*v}};
-        if (auto v = iana_token()) return {{*v}};
-        return nullopt;
+        save_input_pos ptran(*is);
+        ValueType ret;
+
+        if (auto v = token("BINARY"); is_match(v)) ret.value = *v;
+        else if (auto v = token("BOOLEAN"); is_match(v)) ret.value = *v;
+        else if (auto v = token("CAL-ADDRESS"); is_match(v)) ret.value = *v;
+        else if (auto v = token("DATE"); is_match(v)) ret.value = *v;
+        else if (auto v = token("DATE-TIME"); is_match(v)) ret.value = *v;
+        else if (auto v = token("DURATION"); is_match(v)) ret.value = *v;
+        else if (auto v = token("FLOAT"); is_match(v)) ret.value = *v;
+        else if (auto v = token("INTEGER"); is_match(v)) ret.value = *v;
+        else if (auto v = token("PERIOD"); is_match(v)) ret.value = *v;
+        else if (auto v = token("RECUR"); is_match(v)) ret.value = *v;
+        else if (auto v = token("TEXT"); is_match(v)) ret.value = *v;
+        else if (auto v = token("TIME"); is_match(v)) ret.value = *v;
+        else if (auto v = token("URI"); is_match(v)) ret.value = *v;
+        else if (auto v = token("UTC-OFFSET"); is_match(v)) ret.value = *v;
+        else if (auto v = x_name(); is_match(v)) ret.value = *v;
+        else if (auto v = iana_token(); is_match(v)) ret.value = *v;
+        else return no_match;
+
+        ptran.commit();
+        return ret;
 }
 
 //       valuetypeparam = "VALUE" "=" valuetype
@@ -5701,11 +5803,11 @@ result<ValueTypeParam> IcalParser::valuetypeparam() {
         save_input_pos ptran(*is);
         ValueTypeParam ret;
 
-        if (!token("VALUE")) return nullopt;
-        if (!token("=")) return nullopt;
+        if (!is_match(token("VALUE"))) return no_match;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
-        if (auto v = valuetype()) ret.value = *v;
-        else return nullopt;
+        if (auto v = valuetype(); is_match(v)) ret.value = *v;
+        else return SYNTAX_ERROR("");
 
         ptran.commit();
         return ret;
@@ -5718,15 +5820,16 @@ result<IanaParam> IcalParser::iana_param() {
         save_input_pos ptran(*is);
         IanaParam ret;
 
-        if (auto v = iana_token()) ret.token = *v;
-        else return nullopt;
+        if (auto v = iana_token(); is_match(v)) ret.token = *v;
+        else return no_match;
 
-        if (!token("=")) return nullopt;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         do {
-                if (auto v = param_value()) ret.values.push_back(*v);
-                else return nullopt;
-        } while (token(","));
+                if (auto v = param_value(); is_match(v))
+                        ret.values.push_back(*v);
+                else return SYNTAX_ERROR("");
+        } while (is_match(token(",")));
 
         ptran.commit();
         return ret;
@@ -5739,15 +5842,16 @@ result<XParam> IcalParser::x_param() {
         save_input_pos ptran(*is);
         XParam ret;
 
-        if (auto v = x_name()) ret.name = *v;
-        else return nullopt;
+        if (auto v = x_name(); is_match(v)) ret.name = *v;
+        else return no_match;
 
-        if (!token("=")) return nullopt;
+        if (!is_match(token("="))) return SYNTAX_ERROR("");
 
         do {
-                if (auto v = param_value()) ret.values.push_back(*v);
-                else return PARSING_ERROR("");
-        } while (token(","));
+                if (auto v = param_value(); is_match(v))
+                        ret.values.push_back(*v);
+                else return SYNTAX_ERROR("");
+        } while (is_match(token(",")));
 
         ptran.commit();
         return ret;
@@ -5777,7 +5881,7 @@ result<XParam> IcalParser::x_param() {
 //                   / other-param
 ICalParameter IcalParser::expect_icalparameter() {
         CALLSTACK;
-        if (auto v = icalparameter())
+        if (auto v = icalparameter(); is_match(v))
                 return *v;
         throw syntax_error(is.tellg());
 }
@@ -5786,28 +5890,28 @@ result<ICalParameter> IcalParser::icalparameter() {
         save_input_pos ptran(*is);
         ICalParameter ret;
 
-        if (auto v = altrepparam()) ret = *v;
-        else if (auto v = cnparam()) ret = *v;
-        else if (auto v = cutypeparam()) ret = *v;
-        else if (auto v = delfromparam()) ret = *v;
-        else if (auto v = deltoparam()) ret = *v;
-        else if (auto v = dirparam()) ret = *v;
-        else if (auto v = encodingparam()) ret = *v;
-        else if (auto v = fmttypeparam()) ret = *v;
-        else if (auto v = fbtypeparam()) ret = *v;
-        else if (auto v = languageparam()) ret = *v;
-        else if (auto v = memberparam()) ret = *v;
-        else if (auto v = partstatparam()) ret = *v;
-        else if (auto v = rangeparam()) ret = *v;
-        else if (auto v = trigrelparam()) ret = *v;
-        else if (auto v = reltypeparam()) ret = *v;
-        else if (auto v = roleparam()) ret = *v;
-        else if (auto v = rsvpparam()) ret = *v;
-        else if (auto v = sentbyparam()) ret = *v;
-        else if (auto v = tzidparam()) ret = *v;
-        else if (auto v = valuetypeparam()) ret = *v;
-        else if (auto v = other_param()) ret = *v;
-        else return nullopt;
+        if (auto v = altrepparam(); is_match(v)) ret = *v;
+        else if (auto v = cnparam(); is_match(v)) ret = *v;
+        else if (auto v = cutypeparam(); is_match(v)) ret = *v;
+        else if (auto v = delfromparam(); is_match(v)) ret = *v;
+        else if (auto v = deltoparam(); is_match(v)) ret = *v;
+        else if (auto v = dirparam(); is_match(v)) ret = *v;
+        else if (auto v = encodingparam(); is_match(v)) ret = *v;
+        else if (auto v = fmttypeparam(); is_match(v)) ret = *v;
+        else if (auto v = fbtypeparam(); is_match(v)) ret = *v;
+        else if (auto v = languageparam(); is_match(v)) ret = *v;
+        else if (auto v = memberparam(); is_match(v)) ret = *v;
+        else if (auto v = partstatparam(); is_match(v)) ret = *v;
+        else if (auto v = rangeparam(); is_match(v)) ret = *v;
+        else if (auto v = trigrelparam(); is_match(v)) ret = *v;
+        else if (auto v = reltypeparam(); is_match(v)) ret = *v;
+        else if (auto v = roleparam(); is_match(v)) ret = *v;
+        else if (auto v = rsvpparam(); is_match(v)) ret = *v;
+        else if (auto v = sentbyparam(); is_match(v)) ret = *v;
+        else if (auto v = tzidparam(); is_match(v)) ret = *v;
+        else if (auto v = valuetypeparam(); is_match(v)) ret = *v;
+        else if (auto v = other_param(); is_match(v)) ret = *v;
+        else return no_match;
 
         ptran.commit();
         return ret;

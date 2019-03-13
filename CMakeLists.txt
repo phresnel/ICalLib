@@ -3,6 +3,7 @@ project(supercal)
 
 set(CMAKE_CXX_STANDARD 17)
 
+add_compile_options(/bigobj)
 add_executable(
         supercal
         src/main.cc
